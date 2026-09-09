@@ -18,8 +18,12 @@ public sealed class Thresholds
     public double UptimeCriticalDays { get; init; } = 30;
     public int RecentErrorWarnCount { get; init; } = 20;
     public int RecentErrorCriticalCount { get; init; } = 100;
+    public int RepeatedEventWarnCount { get; init; } = 5;
+    public int RepeatedEventCriticalCount { get; init; } = 20;
     public int StartupWarnCount { get; init; } = 20;
     public int TempOlderThanDays { get; init; } = 3;
+    public int CoverageWarnPercent { get; init; } = 65;
+    public int CoverageHighPercent { get; init; } = 85;
 }
 
 public sealed class SystemInfo
@@ -168,6 +172,9 @@ public sealed class Assessment
 {
     public int Score { get; set; }
     public string Status { get; set; } = "OK";
+    public int CoveragePercent { get; set; } = 100;
+    public string CoverageStatus { get; set; } = "HIGH";
+    public List<string> MissingSignals { get; set; } = [];
     public List<Finding> Findings { get; set; } = [];
 }
 
