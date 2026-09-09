@@ -1,6 +1,6 @@
-**/bin/
-**/obj/
-.vs/
+bin/
+obj/
+artifacts/
 *.user
 *.suo
-artifacts/
+*.log
