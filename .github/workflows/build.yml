@@ -1,0 +1,56 @@
+name: Windows EXE
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
+
+      - name: Build
+        run: dotnet build src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release --no-restore -warnaserror
+
+      - name: Smoke self-test
+        shell: pwsh
+        run: |
+          dotnet run --project src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release --no-build -- --selftest
+          if ($LASTEXITCODE -ne 0) { throw "Self-test failed with exit code $LASTEXITCODE" }
+
+      - name: Publish single EXE
+        run: dotnet publish src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/publish
+
+      - name: Verify package and checksum
+        shell: pwsh
+        run: |
+          $exe = Get-Item artifacts/publish/Gradient-PC-Health-Check.exe -ErrorAction Stop
+          $unexpected = Get-ChildItem artifacts/publish -File | Where-Object Name -ne 'Gradient-PC-Health-Check.exe'
+          if ($unexpected) { throw "Single-file gate failed: $($unexpected.Name -join ', ')" }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          New-Item -ItemType Directory -Force artifacts/final | Out-Null
+          Copy-Item $exe.FullName artifacts/final/Gradient-PC-Health-Check.exe
+          Set-Content artifacts/final/Gradient-PC-Health-Check.exe.sha256 "$hash  Gradient-PC-Health-Check.exe" -Encoding ascii
+          Write-Host "SHA-256: $hash"
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradient-pc-health-check-windows-x64
+          path: artifacts/final/*
+          if-no-files-found: error
+          retention-days: 30
