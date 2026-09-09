@@ -2,7 +2,7 @@
 
 Внутреннее Windows-приложение Service Desk для первичной диагностики жалоб **«компьютер сильно тормозит»** и безопасного применения выбранных remediation.
 
-Текущая ветка разработки: **0.3.3 pilot**.
+Текущая ветка разработки: **0.3.4 pilot**.
 
 Для инженера это один GUI-файл `Gradient-PC-Health-Check.exe`. Диагностика запускается автоматически; рекомендации отображаются с галочками только там, где действие разрешено автоматизировать. По кнопке **«Применить выбранное»** приложение при необходимости запрашивает UAC, выполняет allow-list remediation и затем автоматически повторяет диагностику с отчётом **до/после**.
 
@@ -29,20 +29,22 @@
 
 Начиная с 0.3.2 CPU и дисковая очередь оцениваются не по одному мгновенному WMI-кадру. Программа делает **5 замеров** с короткими интервалами и использует медиану. Это уменьшает вероятность ложного WARN/CRIT из-за случайного пика в момент старта приложения или фонового короткого задания. TOP процессов по CPU/RAM/I/O по-прежнему снимается отдельным интервальным замером.
 
-## UAC и запуск из Downloads
+## UAC и доверенная точка запуска
 
-Начиная с 0.3.1 инженер может запустить полученный EXE прямо из Downloads/рабочего каталога и выбрать административное действие. При первом таком UAC приложение:
+Начиная с 0.3.4 диагностику по-прежнему можно запускать из Downloads или другого рабочего каталога **без административных прав**. Однако действия, требующие elevation (`CleanTemp`, `DISM`, `SFC`), разрешены только если сам EXE уже находится по каноническому пути:
 
-1. повышает только bootstrap-процесс;
-2. копирует тот же EXE в `%ProgramFiles%\Gradient\PCHealthCheck`;
-3. сверяет SHA-256 до и после копирования;
-4. запускает actual remediation worker уже из Program Files;
-5. возвращает результат исходному GUI через локальный named pipe с одноразовыми session ID + nonce;
-6. после remediation автоматически повторяет диагностику.
+`%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`
 
-При UAC допускается ввод **отдельной admin-учётки Service Desk**: ACL локального pipe разрешает подключение локальной группе Administrators, а session/nonce связывают ответ с конкретным запросом GUI.
+Автоматический bootstrap из Downloads в Program Files отключён. Причина: без Authenticode или заранее установленного доверенного broker-а безопасно исключить pre-UAC подмену файла в user-writable каталоге нельзя. Поэтому перед пилотным применением административных remediation EXE должен быть размещён в Program Files средствами корпоративного software deployment (Kaspersky/Intune/SCCM/другой управляемый канал).
 
-Для штатного развёртывания по-прежнему предпочтительно заранее размещать EXE в `%ProgramFiles%\Gradient\PCHealthCheck` средствами управления ПО: тогда bootstrap при каждом новом ПК не нужен.
+При UAC допускается ввод **отдельной admin-учётки Service Desk**: ACL локального pipe разрешает подключение локальной группе Administrators, а одноразовые session ID + nonce связывают ответ с конкретным запросом GUI.
+
+Worker дополнительно fail closed:
+
+- не запускается из произвольного пути, включая другие каталоги внутри Program Files;
+- не доверяет reparse-point/junction на каноническом пути;
+- отклоняет mixed action list, если в нём есть хотя бы одно неизвестное действие;
+- legacy `--bootstrap-worker` возвращает отказ и ничего не устанавливает.
 
 ## Разрешённые автоматические действия
 
@@ -55,14 +57,17 @@ Prefetch, универсальный Winsock reset, очистка Windows Updat
 
 ## Сборка и контроль
 
-Windows 11 x64, .NET 8 WinForms, self-contained single-file EXE. GitHub Actions обязан пройти restore, build с warnings-as-errors, smoke self-test, single-file publish, проверку состава артефакта и генерацию SHA-256.
+Windows 11 x64, .NET 8 WinForms, self-contained single-file EXE. GitHub Actions обязан пройти E2E PowerShell harness smoke, restore, NuGet vulnerability audit, build с warnings-as-errors, source self-test, single-file publish, self-test уже опубликованного EXE, проверку worker security boundary, состава артефакта, FileVersion и SHA-256.
 
-Self-test 0.3.3 дополнительно проверяет:
+Self-test 0.3.4 проверяет:
 
 - полный healthy dataset и 100% coverage;
 - missing telemetry: отсутствие данных не должно давать общий `OK`;
 - большое количество разнородных Event Log ошибок без повторяемости не должно штрафовать score;
 - повторяющийся Event ID должен подниматься как диагностически значимый сигнал;
-- существующие правила безопасной remediation и trusted elevation location.
+- существующие правила безопасной remediation;
+- доверенным elevation path считается только точный канонический путь приложения;
+- arbitrary path внутри Program Files и Temp не считаются доверенными;
+- legacy bootstrap отключён.
 
 Брендинг: щит с буквой **G** в стиле семейства G-switcher и линией health/pulse.
