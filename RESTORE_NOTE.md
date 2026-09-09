@@ -1,1 +1,0 @@
-UI restore in progress.
