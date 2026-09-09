@@ -22,7 +22,7 @@ public sealed class DiagnosticsService
         var data = new DiagnosticData();
         RunSection("Сведения о системе", progress, data, () => data.System = GetSystemInfo());
         ct.ThrowIfCancellationRequested();
-        RunSection("Текущая загрузка", progress, data, () => data.Performance = GetPerformanceSnapshot());
+        RunSection("Устойчивая загрузка (5 замеров)", progress, data, () => data.Performance = GetPerformanceSnapshot(ct));
         RunSection("Логические диски", progress, data, () => data.LogicalDisks = GetLogicalDisks());
         RunSection("Физические накопители", progress, data, () => data.PhysicalDisks = GetPhysicalDisks());
         ct.ThrowIfCancellationRequested();
@@ -102,32 +102,65 @@ public sealed class DiagnosticsService
         return result;
     }
 
-    private static PerformanceSnapshot GetPerformanceSnapshot()
+    private static PerformanceSnapshot GetPerformanceSnapshot(CancellationToken ct)
     {
-        var result = new PerformanceSnapshot();
-        try
-        {
-            using var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT PercentProcessorTime FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name='_Total'");
-            using var item = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
-            if (item is not null) result.CpuPercent = Math.Round(ToDouble(item["PercentProcessorTime"]), 1);
-        }
-        catch { }
+        const int sampleCount = 5;
+        const int sampleDelayMs = 300;
+        var cpuSamples = new List<double>(sampleCount);
+        var diskBusySamples = new List<double>(sampleCount);
+        var diskQueueSamples = new List<double>(sampleCount);
 
-        try
+        for (var sample = 0; sample < sampleCount; sample++)
         {
-            using var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT PercentDiskTime,CurrentDiskQueueLength FROM Win32_PerfFormattedData_PerfDisk_PhysicalDisk WHERE Name='_Total'");
-            using var item = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
-            if (item is not null)
+            ct.ThrowIfCancellationRequested();
+
+            try
             {
-                result.DiskBusyPercent = Math.Round(ToDouble(item["PercentDiskTime"]), 1);
-                result.DiskQueueLength = Math.Round(ToDouble(item["CurrentDiskQueueLength"]), 1);
+                using var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT PercentProcessorTime FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name='_Total'");
+                using var item = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
+                if (item is not null)
+                {
+                    var value = ToDouble(item["PercentProcessorTime"]);
+                    if (double.IsFinite(value)) cpuSamples.Add(Math.Clamp(value, 0d, 100d));
+                }
+            }
+            catch { }
+
+            try
+            {
+                using var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT PercentDiskTime,CurrentDiskQueueLength FROM Win32_PerfFormattedData_PerfDisk_PhysicalDisk WHERE Name='_Total'");
+                using var item = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
+                if (item is not null)
+                {
+                    var busy = ToDouble(item["PercentDiskTime"]);
+                    var queue = ToDouble(item["CurrentDiskQueueLength"]);
+                    if (double.IsFinite(busy)) diskBusySamples.Add(Math.Max(0d, busy));
+                    if (double.IsFinite(queue)) diskQueueSamples.Add(Math.Max(0d, queue));
+                }
+            }
+            catch { }
+
+            if (sample + 1 < sampleCount)
+            {
+                for (var wait = 0; wait < sampleDelayMs / 50; wait++)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    Thread.Sleep(50);
+                }
             }
         }
-        catch { }
 
-        using (var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem"))
-        using (var item = searcher.Get().Cast<ManagementObject>().FirstOrDefault())
+        var result = new PerformanceSnapshot
         {
+            CpuPercent = Median(cpuSamples),
+            DiskBusyPercent = Median(diskBusySamples),
+            DiskQueueLength = Median(diskQueueSamples)
+        };
+
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("root\\CIMV2", "SELECT TotalVisibleMemorySize,FreePhysicalMemory FROM Win32_OperatingSystem");
+            using var item = searcher.Get().Cast<ManagementObject>().FirstOrDefault();
             if (item is not null)
             {
                 var totalKb = ToDouble(item["TotalVisibleMemorySize"]);
@@ -140,6 +173,8 @@ public sealed class DiagnosticsService
                 }
             }
         }
+        catch { }
+
         return result;
     }
 
@@ -505,6 +540,15 @@ public sealed class DiagnosticsService
     private static double ToDouble(object? value)
     {
         try { return Convert.ToDouble(value); } catch { return 0; }
+    }
+
+    private static double? Median(List<double> values)
+    {
+        if (values.Count == 0) return null;
+        values.Sort();
+        var middle = values.Count / 2;
+        var median = values.Count % 2 == 1 ? values[middle] : (values[middle - 1] + values[middle]) / 2d;
+        return Math.Round(median, 1);
     }
 
     private static string JoinArray(object? value)
