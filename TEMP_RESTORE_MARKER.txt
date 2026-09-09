@@ -1,0 +1,1 @@
+Temporary marker for atomic UI restore; removed in next Git-data commit.
