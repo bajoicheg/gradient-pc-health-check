@@ -74,8 +74,9 @@ public sealed class AssessmentService
 
         var penalty = findings.Sum(x => x.Penalty);
         var score = Math.Clamp(100 - penalty, 0, 100);
-        var status = score >= 85 ? "OK" : score >= 65 ? "WARN" : "CRIT";
-        if (coverage.Percent < Thresholds.CoverageHighPercent && status == "OK") status = "WARN";
+        var hasCritical = findings.Any(x => x.Severity == "CRIT");
+        var hasWarning = findings.Any(x => x.Severity == "WARN");
+        var status = hasCritical ? "CRIT" : hasWarning || score < 85 ? "WARN" : "OK";
 
         return new ScanResult
         {
