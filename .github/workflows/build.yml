@@ -33,7 +33,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $scripts = Get-ChildItem tools/e2e -Filter *.ps1 -File
-          if ($scripts.Count -lt 4) { throw "Expected at least 4 E2E PowerShell tools, found $($scripts.Count)." }
+          if ($scripts.Count -lt 5) { throw "Expected at least 5 E2E PowerShell tools, found $($scripts.Count)." }
 
           foreach ($script in $scripts) {
             $tokens = $null
@@ -78,6 +78,17 @@ jobs:
           }
 
           Write-Host 'E2E PowerShell tools smoke passed.'
+
+      - name: Pilot packager parser gate
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $parseErrors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\tools\ci\Create-PilotBundle.ps1).Path, [ref]$tokens, [ref]$parseErrors)
+          if (@($parseErrors).Count -gt 0) {
+            $details = @($parseErrors) | ForEach-Object { "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }
+            throw "Pilot packager parse errors: $($details -join ' | ')"
+          }
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
@@ -199,10 +210,50 @@ jobs:
           Write-Host "Version: $actualFileVersion"
           Write-Host "SHA-256: $hash"
 
+      - name: Create and verify pilot bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -File .\tools\ci\Create-PilotBundle.ps1 `
+            -ExePath .\artifacts\final\Gradient-PC-Health-Check.exe `
+            -ChecksumPath .\artifacts\final\Gradient-PC-Health-Check.exe.sha256 `
+            -OutputDirectory .\artifacts\pilot `
+            -GitSha $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw "Pilot packager failed with exit code $LASTEXITCODE" }
+
+          $pilotZip = Get-ChildItem .\artifacts\pilot -Filter 'Gradient-PC-Health-Check-*-pilot.zip' -File | Select-Object -First 1
+          if ($null -eq $pilotZip -or $pilotZip.Length -le 0) { throw 'Pilot bundle ZIP missing or empty.' }
+
+          $verify = Join-Path $env:RUNNER_TEMP 'gpchc-pilot-verify'
+          Remove-Item $verify -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $verify | Out-Null
+          Expand-Archive -LiteralPath $pilotZip.FullName -DestinationPath $verify -Force
+
+          $manifest = Get-Content (Join-Path $verify 'package-manifest.json') -Raw | ConvertFrom-Json
+          $packagedExe = Join-Path $verify 'Gradient-PC-Health-Check.exe'
+          if (-not (Test-Path $packagedExe -PathType Leaf)) { throw 'Packaged EXE missing.' }
+          $packagedHash = (Get-FileHash $packagedExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($packagedHash -ne [string]$manifest.sha256) { throw 'Packaged EXE hash does not match package manifest.' }
+          if ([string]$manifest.gitSha -ne $env:GITHUB_SHA) { throw 'Package manifest Git SHA mismatch.' }
+          if (-not (Test-Path (Join-Path $verify 'START-HERE.txt'))) { throw 'START-HERE.txt missing.' }
+          if (-not (Test-Path (Join-Path $verify 'docs\E2E-TEST-PLAN.md'))) { throw 'E2E test plan missing.' }
+          if (-not (Test-Path (Join-Path $verify 'e2e\Analyze-E2EEvidence.ps1'))) { throw 'Evidence analyzer missing.' }
+          $toolCount = @(Get-ChildItem (Join-Path $verify 'e2e') -Filter '*.ps1' -File).Count
+          if ($toolCount -lt 5) { throw "Expected at least 5 E2E tools in pilot bundle, found $toolCount." }
+          Write-Host "Pilot bundle verified: $($pilotZip.Name)"
+
       - name: Upload EXE
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gradient-pc-health-check-windows-x64
           path: artifacts/final/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload pilot E2E bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gradient-pc-health-check-pilot-e2e
+          path: artifacts/pilot/Gradient-PC-Health-Check-*-pilot.zip
           if-no-files-found: error
           retention-days: 30
