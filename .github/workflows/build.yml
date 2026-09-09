@@ -9,46 +9,117 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: pc-health-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          dotnet-version: '8.0.x'
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.425'
 
       - name: Restore
         run: dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
 
+      - name: NuGet vulnerability gate
+        shell: pwsh
+        run: |
+          $output = dotnet list src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj package --vulnerable --include-transitive --format json
+          if ($LASTEXITCODE -ne 0) { throw "NuGet vulnerability audit command failed with exit code $LASTEXITCODE" }
+          $audit = ($output -join "`n") | ConvertFrom-Json
+          $vulnerable = @()
+          foreach ($project in @($audit.projects)) {
+            foreach ($framework in @($project.frameworks)) {
+              foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
+                if ($null -ne $package -and @($package.vulnerabilities).Count -gt 0) {
+                  $vulnerable += $package
+                }
+              }
+            }
+          }
+          if ($vulnerable.Count -gt 0) {
+            $names = $vulnerable | ForEach-Object { "$($_.id) $($_.resolvedVersion)" }
+            throw "Vulnerable NuGet packages detected: $($names -join ', ')"
+          }
+          Write-Host "NuGet vulnerability gate: no known vulnerable packages."
+
       - name: Build
         run: dotnet build src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release --no-restore -warnaserror
 
-      - name: Smoke self-test
+      - name: Source-build self-test
         shell: pwsh
         run: |
           dotnet run --project src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release --no-build -- --selftest
-          if ($LASTEXITCODE -ne 0) { throw "Self-test failed with exit code $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) { throw "Source-build self-test failed with exit code $LASTEXITCODE" }
 
       - name: Publish single EXE
         run: dotnet publish src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/publish
 
-      - name: Verify package and checksum
+      - name: Published EXE self-test
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path artifacts/publish/Gradient-PC-Health-Check.exe).Path
+          & $exe --selftest
+          if ($LASTEXITCODE -ne 0) { throw "Published single-file EXE self-test failed with exit code $LASTEXITCODE" }
+
+      - name: Published worker security negative tests
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path artifacts/publish/Gradient-PC-Health-Check.exe).Path
+          $session = [guid]::NewGuid().ToString('D')
+          $pipe = "GradientPcHealthCheck-$session"
+          $nonce = 'A' * 64
+
+          & $exe --worker --session $session --actions 'DefinitelyNotAllowed' --temp-days 3 --pipe $pipe --nonce $nonce
+          if ($LASTEXITCODE -ne 21) { throw "Unknown action was not rejected as expected. Exit code: $LASTEXITCODE" }
+
+          & $exe --worker --session $session --actions 'FlushDns' --temp-days 3 --pipe 'invalid-pipe-name' --nonce $nonce
+          if ($LASTEXITCODE -ne 24) { throw "Invalid pipe name was not rejected as expected. Exit code: $LASTEXITCODE" }
+
+          & $exe --worker --session $session --actions 'FlushDns' --temp-days 3 --pipe $pipe --nonce 'bad-nonce'
+          if ($LASTEXITCODE -ne 25) { throw "Invalid nonce was not rejected as expected. Exit code: $LASTEXITCODE" }
+
+          Write-Host "Published worker negative security tests passed."
+
+      - name: Verify package, version and checksum
         shell: pwsh
         run: |
           $exe = Get-Item artifacts/publish/Gradient-PC-Health-Check.exe -ErrorAction Stop
           $unexpected = Get-ChildItem artifacts/publish -File | Where-Object Name -ne 'Gradient-PC-Health-Check.exe'
           if ($unexpected) { throw "Single-file gate failed: $($unexpected.Name -join ', ')" }
+
+          [xml]$project = Get-Content src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
+          $expectedVersion = [string]$project.Project.PropertyGroup.Version
+          $actualFileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe.FullName).FileVersion
+          if ([string]::IsNullOrWhiteSpace($expectedVersion)) { throw 'Project Version is empty.' }
+          if (-not $actualFileVersion.StartsWith($expectedVersion, [StringComparison]::Ordinal)) {
+            throw "File version mismatch. Project=$expectedVersion EXE=$actualFileVersion"
+          }
+
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force artifacts/final | Out-Null
           Copy-Item $exe.FullName artifacts/final/Gradient-PC-Health-Check.exe
           Set-Content artifacts/final/Gradient-PC-Health-Check.exe.sha256 "$hash  Gradient-PC-Health-Check.exe" -Encoding ascii
+          Write-Host "Version: $actualFileVersion"
           Write-Host "SHA-256: $hash"
 
       - name: Upload EXE
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: gradient-pc-health-check-windows-x64
           path: artifacts/final/*
