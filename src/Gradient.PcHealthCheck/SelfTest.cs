@@ -115,10 +115,15 @@ internal static class SelfTest
         {
             var trusted = Path.Combine(pf, "Gradient", "PCHealthCheck", "Gradient-PC-Health-Check.exe");
             if (!RemediationWorker.IsTrustedElevationLocation(trusted)) return 1;
+
+            var arbitraryProgramFiles = Path.Combine(pf, "OtherApp", "Gradient-PC-Health-Check.exe");
+            if (RemediationWorker.IsTrustedElevationLocation(arbitraryProgramFiles)) return 2;
         }
 
         var tempCandidate = Path.Combine(Path.GetTempPath(), "Gradient-PC-Health-Check.exe");
-        if (RemediationWorker.IsTrustedElevationLocation(tempCandidate)) return 2;
+        if (RemediationWorker.IsTrustedElevationLocation(tempCandidate)) return 3;
+
+        if (RemediationWorker.RunBootstrap(["--bootstrap-worker"]) != 48) return 4;
         return 0;
     }
 
