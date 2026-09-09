@@ -1,0 +1,143 @@
+name: E2E Evidence Analyzer
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-analyzer-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyzer:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Parse analyzer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = (Resolve-Path .\tools\e2e\Analyze-E2EEvidence.ps1).Path
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if (@($errors).Count -gt 0) {
+            $details = @($errors) | ForEach-Object { "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }
+            throw "Analyzer parse errors: $($details -join ' | ')"
+          }
+
+      - name: Synthetic PASS evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'gpchc-analyzer-pass'
+          $out = Join-Path $env:RUNNER_TEMP 'gpchc-analyzer-output'
+          $zip = Join-Path $env:RUNNER_TEMP 'gpchc-analyzer-pass.zip'
+          Remove-Item $root,$out,$zip -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path (Join-Path $root 'reports'),$out | Out-Null
+
+          $hash = 'a' * 64
+          [ordered]@{
+            schemaVersion = 1
+            collectedAt = (Get-Date).ToString('o')
+            machine = 'CI-WIN11'
+            operatingSystem = [ordered]@{ Caption = 'Microsoft Windows 11 Enterprise'; BuildNumber = '26100' }
+            sourceExe = [ordered]@{ sha256 = $hash; fileVersion = '0.3.4.0' }
+            installedExe = [ordered]@{ sha256 = $hash; fileVersion = '0.3.4.0' }
+            sourceAndInstalledSha256Match = $true
+          } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $root 'environment.json') -Encoding UTF8
+
+          [ordered]@{
+            schemaVersion = 1
+            junctionTest = [ordered]@{ enabled = $false }
+          } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $root 'e2e-manifest.json') -Encoding UTF8
+
+          [ordered]@{
+            schemaVersion = 1
+            passed = $true
+            checks = @([ordered]@{ name = 'Old Temp sentinel deleted'; passed = $true })
+          } | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $root 'e2e-verification.json') -Encoding UTF8
+
+          $before = [ordered]@{
+            Assessment = [ordered]@{ Score = 94; Status = 'OK'; CoveragePercent = 100; MissingSignals = @() }
+            Data = [ordered]@{ System = [ordered]@{ ComputerName = 'CI-WIN11' }; CollectionWarnings = @() }
+          }
+          $after = [ordered]@{
+            Assessment = [ordered]@{ Score = 96; Status = 'OK'; CoveragePercent = 100; MissingSignals = @() }
+            Data = [ordered]@{ System = [ordered]@{ ComputerName = 'CI-WIN11' }; CollectionWarnings = @() }
+          }
+          [ordered]@{
+            Before = $before
+            After = $after
+            Remediation = [ordered]@{ Actions = @([ordered]@{ Id = 'CleanTemp'; Success = $true }) }
+          } | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $root 'reports\PCHealth_CI_verification.json') -Encoding UTF8
+
+          Compress-Archive -Path (Join-Path $root '*') -DestinationPath $zip -CompressionLevel Optimal
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Analyze-E2EEvidence.ps1 -EvidenceZip $zip -OutputDirectory $out
+          if ($LASTEXITCODE -ne 0) { throw "Synthetic PASS analysis returned $LASTEXITCODE" }
+
+          $json = Get-ChildItem $out -Filter '*analysis-*.json' -File | Select-Object -First 1
+          $md = Get-ChildItem $out -Filter '*analysis-*.md' -File | Select-Object -First 1
+          if ($null -eq $json -or $null -eq $md) { throw 'Analyzer did not create JSON and Markdown outputs.' }
+          $result = Get-Content $json.FullName -Raw | ConvertFrom-Json
+          if ($result.verdict -ne 'PASS' -or $result.failCount -ne 0 -or $result.warnCount -ne 0) {
+            throw "Unexpected analyzer verdict: $($result.verdict), fail=$($result.failCount), warn=$($result.warnCount)"
+          }
+
+          $mdText = Get-Content $md.FullName -Raw
+          if ($mdText -notmatch '\*\*Verdict:\*\* PASS') { throw 'Markdown output does not contain PASS verdict.' }
+
+      - name: Synthetic FAIL evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP 'gpchc-analyzer-fail'
+          $out = Join-Path $env:RUNNER_TEMP 'gpchc-analyzer-fail-output'
+          Remove-Item $root,$out -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $root,$out | Out-Null
+
+          [ordered]@{
+            schemaVersion = 1
+            machine = 'CI-WIN11'
+            operatingSystem = [ordered]@{ Caption = 'Microsoft Windows 11 Enterprise' }
+          } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $root 'environment.json') -Encoding UTF8
+
+          $p = Start-Process powershell.exe -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-File',(Resolve-Path .\tools\e2e\Analyze-E2EEvidence.ps1).Path,'-EvidenceDirectory',$root,'-OutputDirectory',$out) -Wait -PassThru
+          if ($p.ExitCode -ne 20) { throw "Synthetic FAIL analysis should return 20, got $($p.ExitCode)" }
+          $json = Get-ChildItem $out -Filter '*analysis-*.json' -File | Select-Object -First 1
+          if ($null -eq $json) { throw 'FAIL analysis JSON was not created.' }
+          $result = Get-Content $json.FullName -Raw | ConvertFrom-Json
+          if ($result.verdict -ne 'FAIL' -or $result.failCount -lt 1) { throw 'Synthetic incomplete evidence did not produce FAIL.' }
+
+      - name: Reject ZIP traversal
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = Join-Path $env:RUNNER_TEMP 'gpchc-analyzer-unsafe.zip'
+          $out = Join-Path $env:RUNNER_TEMP 'gpchc-analyzer-unsafe-output'
+          Remove-Item $zip,$out -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $archive = [System.IO.Compression.ZipFile]::Open($zip, [System.IO.Compression.ZipArchiveMode]::Create)
+          try {
+            $entry = $archive.CreateEntry('../escape.txt')
+            $writer = [System.IO.StreamWriter]::new($entry.Open())
+            try { $writer.Write('must-not-extract') } finally { $writer.Dispose() }
+          }
+          finally { $archive.Dispose() }
+
+          $p = Start-Process powershell.exe -ArgumentList @('-NoLogo','-NoProfile','-NonInteractive','-File',(Resolve-Path .\tools\e2e\Analyze-E2EEvidence.ps1).Path,'-EvidenceZip',$zip,'-OutputDirectory',$out) -Wait -PassThru
+          if ($p.ExitCode -eq 0) { throw 'Unsafe ZIP traversal entry was accepted.' }
+          $escaped = Join-Path (Split-Path $out -Parent) 'escape.txt'
+          if (Test-Path $escaped) { throw 'Unsafe ZIP entry escaped extraction root.' }
