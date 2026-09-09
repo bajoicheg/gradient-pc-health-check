@@ -25,6 +25,17 @@ internal static class SelfTest
             if (restart.CanAutomate) return 12;
             if (dism.Preselected || sfc.Preselected) return 13;
             if (result.Assessment.Score >= 100) return 14;
+
+            var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (!string.IsNullOrWhiteSpace(pf))
+            {
+                var trusted = Path.Combine(pf, "Gradient", "PCHealthCheck", "Gradient-PC-Health-Check.exe");
+                if (!RemediationWorker.IsTrustedElevationLocation(trusted)) return 15;
+            }
+
+            var tempCandidate = Path.Combine(Path.GetTempPath(), "Gradient-PC-Health-Check.exe");
+            if (RemediationWorker.IsTrustedElevationLocation(tempCandidate)) return 16;
+
             return 0;
         }
         catch { return 99; }

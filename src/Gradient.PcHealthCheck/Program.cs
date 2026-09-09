@@ -16,6 +16,12 @@ internal static class Program
             return;
         }
 
+        if (args.Any(a => string.Equals(a, "--bootstrap-worker", StringComparison.OrdinalIgnoreCase)))
+        {
+            Environment.Exit(RemediationWorker.RunBootstrap(args));
+            return;
+        }
+
         if (args.Any(a => string.Equals(a, "--worker", StringComparison.OrdinalIgnoreCase)))
         {
             Environment.Exit(RemediationWorker.Run(args));

@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 
@@ -11,6 +13,7 @@ public static class RemediationWorker
 {
     private static readonly string[] Allowed = ["CleanTemp", "FlushDns", "Dism", "Sfc"];
     private const string PipePrefix = "GradientPcHealthCheck-";
+    private const string InstalledExeName = "Gradient-PC-Health-Check.exe";
 
     public static int Run(string[] args)
     {
@@ -26,10 +29,7 @@ public static class RemediationWorker
             if (!IsValidPipeName(pipeName, session!)) return 24;
             if (!IsValidNonce(nonce)) return 25;
 
-            var actions = (actionsCsv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(a => Allowed.Contains(a, StringComparer.OrdinalIgnoreCase))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var actions = ParseActions(actionsCsv);
             if (actions.Count == 0) return 21;
 
             var needsAdmin = actions.Any(a => a is "CleanTemp" or "Dism" or "Sfc");
@@ -39,14 +39,77 @@ public static class RemediationWorker
             if (string.IsNullOrWhiteSpace(profile)) return 23;
 
             var days = int.TryParse(tempDaysText, out var parsed) ? Math.Clamp(parsed, 1, 30) : 3;
+
+            // Connect before long-running remediation. This confirms elevation/bootstrap quickly,
+            // while the pipe remains open until the final result is written.
+            using var client = new NamedPipeClientStream(".", pipeName!, PipeDirection.Out, PipeOptions.None);
+            client.Connect((int)TimeSpan.FromSeconds(45).TotalMilliseconds);
+
             var batch = Execute(session!, actions, profile, days);
             var envelope = new WorkerEnvelope { Nonce = nonce!, Result = batch };
-            SendResult(pipeName!, envelope);
+            WriteResult(client, envelope);
             return batch.Actions.All(x => x.Success) ? 0 : 2;
         }
         catch
         {
             return 99;
+        }
+    }
+
+    /// <summary>
+    /// Elevated bootstrap used when the GUI was launched from a user-writable location such as Downloads.
+    /// The same signed/hashed candidate EXE is copied into Program Files, verified byte-for-byte by SHA-256,
+    /// and the trusted copy is then used as the actual remediation worker. The GUI still receives the result
+    /// over the one-time named-pipe session.
+    /// </summary>
+    public static int RunBootstrap(string[] args)
+    {
+        try
+        {
+            if (!DiagnosticsService.IsAdministrator()) return 40;
+
+            var session = Arg(args, "--session");
+            var actionsCsv = Arg(args, "--actions");
+            var tempDaysText = Arg(args, "--temp-days");
+            var pipeName = Arg(args, "--pipe");
+            var nonce = Arg(args, "--nonce");
+
+            if (!Guid.TryParse(session, out _)) return 41;
+            if (!IsValidPipeName(pipeName, session!)) return 42;
+            if (!IsValidNonce(nonce)) return 43;
+            var actions = ParseActions(actionsCsv);
+            if (actions.Count == 0) return 44;
+
+            var trustedExe = EnsureTrustedInstalledCopy();
+            if (!IsTrustedElevationLocation(trustedExe)) return 45;
+
+            var arguments = BuildWorkerArguments(
+                "--worker",
+                session!,
+                string.Join(',', actions),
+                int.TryParse(tempDaysText, out var days) ? Math.Clamp(days, 1, 30) : 3,
+                pipeName!,
+                nonce!);
+
+            using var child = Process.Start(new ProcessStartInfo
+            {
+                FileName = trustedExe,
+                Arguments = arguments,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+            if (child is null) return 46;
+            if (!child.WaitForExit((int)TimeSpan.FromMinutes(125).TotalMilliseconds))
+            {
+                TryKill(child);
+                return 47;
+            }
+            return child.ExitCode;
+        }
+        catch
+        {
+            return 49;
         }
     }
 
@@ -77,30 +140,24 @@ public static class RemediationWorker
         }
 
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Не удалось определить путь к EXE.");
-        if (!IsTrustedElevationLocation(exe))
-            throw new InvalidOperationException("Для безопасного запроса UAC приложение должно быть запущено из Program Files. Разверните Gradient-PC-Health-Check.exe в %ProgramFiles%\\Gradient\\PCHealthCheck или запустите текущую копию уже с правами администратора.");
+        var trusted = IsTrustedElevationLocation(exe);
+        var mode = trusted ? "--worker" : "--bootstrap-worker";
 
         var session = Guid.NewGuid().ToString("D");
         var pipeName = PipePrefix + session;
         var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
-        progress?.Report("Запрашиваю права администратора через UAC…");
-        var actionArg = string.Join(',', ids);
+        progress?.Report(trusted
+            ? "Запрашиваю права администратора через UAC…"
+            : "Запрашиваю UAC и подготавливаю защищённую копию в Program Files…");
 
-        await using var pipe = new NamedPipeServerStream(
-            pipeName,
-            PipeDirection.In,
-            1,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous,
-            64 * 1024,
-            64 * 1024);
-
+        await using var pipe = CreatePipeServer(pipeName);
         var waitForConnection = pipe.WaitForConnectionAsync();
+
         var psi = new ProcessStartInfo
         {
             FileName = exe,
-            Arguments = $"--worker --session \"{session}\" --actions \"{actionArg}\" --temp-days {Math.Clamp(tempDays, 1, 30)} --pipe \"{pipeName}\" --nonce \"{nonce}\"",
+            Arguments = BuildWorkerArguments(mode, session, string.Join(',', ids), Math.Clamp(tempDays, 1, 30), pipeName, nonce),
             UseShellExecute = true,
             Verb = "runas",
             WindowStyle = ProcessWindowStyle.Hidden
@@ -118,36 +175,45 @@ public static class RemediationWorker
 
         using (child)
         {
-            var timeout = Task.Delay(TimeSpan.FromMinutes(125));
-            var connected = await Task.WhenAny(waitForConnection, timeout);
-            if (connected != waitForConnection)
+            var childExitTask = child.WaitForExitAsync();
+            var connectionTimeout = Task.Delay(TimeSpan.FromMinutes(2));
+            var first = await Task.WhenAny(waitForConnection, childExitTask, connectionTimeout);
+
+            if (first == childExitTask)
+            {
+                await childExitTask;
+                throw new InvalidOperationException($"Elevated bootstrap/worker завершился до подключения к каналу результата. Код: {child.ExitCode}.");
+            }
+            if (first == connectionTimeout)
             {
                 TryKill(child);
-                throw new TimeoutException("Elevated worker не подключился к защищённому каналу результата.");
+                throw new TimeoutException("Elevated worker не подключился к защищённому каналу результата за 2 минуты.");
             }
-            await waitForConnection;
 
-            progress?.Report("Административные действия выполняются…");
+            await waitForConnection;
+            progress?.Report(trusted
+                ? "Административные действия выполняются…"
+                : "Защищённая копия подготовлена. Административные действия выполняются…");
+
             using var reader = new StreamReader(pipe, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false, bufferSize: 16 * 1024, leaveOpen: true);
             var readTask = reader.ReadToEndAsync();
-            var exitTask = child.WaitForExitAsync();
-            var completed = await Task.WhenAny(Task.WhenAll(readTask, exitTask), timeout);
-            if (completed == timeout)
+            var operationTimeout = Task.Delay(TimeSpan.FromMinutes(125));
+            var all = Task.WhenAll(readTask, childExitTask);
+            var completed = await Task.WhenAny(all, operationTimeout);
+            if (completed == operationTimeout)
             {
                 TryKill(child);
                 throw new TimeoutException("Превышено общее время выполнения административных действий.");
             }
 
-            await exitTask;
+            await all;
             var json = await readTask;
             if (string.IsNullOrWhiteSpace(json))
                 throw new InvalidOperationException($"Elevated worker завершился с кодом {child.ExitCode}, но не вернул результат.");
 
             var envelope = JsonSerializer.Deserialize<WorkerEnvelope>(json, JsonOptions())
                 ?? throw new InvalidOperationException("Некорректный результат elevated worker.");
-            if (!CryptographicOperations.FixedTimeEquals(
-                    Encoding.ASCII.GetBytes(envelope.Nonce ?? string.Empty),
-                    Encoding.ASCII.GetBytes(nonce)))
+            if (!FixedTimeAsciiEquals(envelope.Nonce, nonce))
                 throw new InvalidOperationException("Не удалось подтвердить подлинность результата elevated worker.");
             if (!string.Equals(envelope.Result.SessionId, session, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Session ID результата elevated worker не совпадает с запросом.");
@@ -155,6 +221,93 @@ public static class RemediationWorker
             progress?.Report("Административные действия завершены. Запускаю автопроверку…");
             return envelope.Result;
         }
+    }
+
+    private static NamedPipeServerStream CreatePipeServer(string pipeName)
+    {
+        var security = new PipeSecurity();
+        var currentSid = WindowsIdentity.GetCurrent().User;
+        if (currentSid is not null)
+            security.AddAccessRule(new PipeAccessRule(currentSid, PipeAccessRights.FullControl, AccessControlType.Allow));
+
+        // A Service Desk engineer may enter a different local/domain admin credential in the UAC dialog.
+        // Permit the local Administrators group to connect while the one-time nonce/session still authenticates the result.
+        var admins = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
+        security.AddAccessRule(new PipeAccessRule(admins, PipeAccessRights.FullControl, AccessControlType.Allow));
+
+        return NamedPipeServerStreamAcl.Create(
+            pipeName,
+            PipeDirection.In,
+            1,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous,
+            64 * 1024,
+            64 * 1024,
+            security);
+    }
+
+    private static string EnsureTrustedInstalledCopy()
+    {
+        var source = Environment.ProcessPath ?? throw new InvalidOperationException("Не удалось определить путь текущего EXE.");
+        if (IsTrustedElevationLocation(source)) return source;
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (string.IsNullOrWhiteSpace(programFiles))
+            throw new InvalidOperationException("Не удалось определить Program Files.");
+
+        var directory = Path.Combine(programFiles, "Gradient", "PCHealthCheck");
+        Directory.CreateDirectory(directory);
+        var target = Path.Combine(directory, InstalledExeName);
+
+        if (File.Exists(target) && FilesHaveSameSha256(source, target)) return target;
+
+        var staging = target + ".new-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            File.Copy(source, staging, overwrite: true);
+            if (!FilesHaveSameSha256(source, staging))
+                throw new InvalidOperationException("SHA-256 установленной копии не совпадает с исходным EXE.");
+            File.Move(staging, target, overwrite: true);
+            if (!FilesHaveSameSha256(source, target))
+                throw new InvalidOperationException("Контроль SHA-256 после установки не пройден.");
+            return target;
+        }
+        finally
+        {
+            try { if (File.Exists(staging)) File.Delete(staging); } catch { }
+        }
+    }
+
+    private static bool FilesHaveSameSha256(string a, string b)
+    {
+        var ah = HashFile(a);
+        var bh = HashFile(b);
+        return CryptographicOperations.FixedTimeEquals(ah, bh);
+    }
+
+    private static byte[] HashFile(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 1024 * 1024, FileOptions.SequentialScan);
+        return SHA256.HashData(stream);
+    }
+
+    private static List<string> ParseActions(string? actionsCsv)
+        => (actionsCsv ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(a => Allowed.Contains(a, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static string BuildWorkerArguments(string mode, string session, string actions, int tempDays, string pipeName, string nonce)
+        => $"{mode} --session {Quote(session)} --actions {Quote(actions)} --temp-days {tempDays} --pipe {Quote(pipeName)} --nonce {Quote(nonce)}";
+
+    private static string Quote(string value) => "\"" + value.Replace("\"", "\\\"") + "\"";
+
+    private static bool FixedTimeAsciiEquals(string? actual, string expected)
+    {
+        var a = Encoding.ASCII.GetBytes(actual ?? string.Empty);
+        var b = Encoding.ASCII.GetBytes(expected);
+        return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
     }
 
     private static RemediationBatchResult Execute(string session, IReadOnlyCollection<string> requested, string profile, int tempDays)
@@ -305,16 +458,14 @@ public static class RemediationWorker
         };
     }
 
-    private static void SendResult(string pipeName, WorkerEnvelope envelope)
+    private static void WriteResult(Stream stream, WorkerEnvelope envelope)
     {
-        using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out, PipeOptions.None);
-        client.Connect((int)TimeSpan.FromSeconds(30).TotalMilliseconds);
         var json = JsonSerializer.Serialize(envelope, JsonOptions());
-        using var writer = new StreamWriter(client, new UTF8Encoding(false), 16 * 1024, leaveOpen: true) { AutoFlush = true };
+        using var writer = new StreamWriter(stream, new UTF8Encoding(false), 16 * 1024, leaveOpen: true) { AutoFlush = true };
         writer.Write(json);
     }
 
-    private static bool IsTrustedElevationLocation(string exePath)
+    public static bool IsTrustedElevationLocation(string exePath)
     {
         try
         {
