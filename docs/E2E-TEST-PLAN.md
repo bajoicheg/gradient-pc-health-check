@@ -6,7 +6,7 @@
 
 Первый E2E выполняется **без DISM/SFC**. Они остаются доступными инженеру, но для проверки основного workflow достаточно `CleanTemp`.
 
-Не отключать AV/EDR, WMI, службы Windows и политики. Не менять системное время. Не запускать неизвестные helper-скрипты от администратора.
+Не отключать AV/EDR, WMI, службы Windows и политики. Не менять системное время. Не ослаблять Execution Policy ради теста: E2E-скрипты следует запускать штатным способом, разрешённым на корпоративном ПК.
 
 ## 1. Исходные условия
 
@@ -21,13 +21,13 @@
 Из корня репозитория:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\e2e\Prepare-CleanTempScenario.ps1
+powershell.exe -NoProfile -File .\tools\e2e\Prepare-CleanTempScenario.ps1
 ```
 
 Расширенная проверка reparse point/junction:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\e2e\Prepare-CleanTempScenario.ps1 -IncludeJunctionTest
+powershell.exe -NoProfile -File .\tools\e2e\Prepare-CleanTempScenario.ps1 -IncludeJunctionTest
 ```
 
 Скрипт работает только со специально выделенными E2E-файлами. Он **не запускает remediation**.
@@ -99,7 +99,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\e2e\Prepare-Clea
 ## 6. Автоматическая проверка CleanTemp
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\e2e\Verify-CleanTempScenario.ps1
+powershell.exe -NoProfile -File .\tools\e2e\Verify-CleanTempScenario.ps1
 ```
 
 Ожидается:
@@ -128,7 +128,7 @@ Get-FileHash "$env:ProgramFiles\Gradient\PCHealthCheck\Gradient-PC-Health-Check.
 ## 8. Собрать evidence одним ZIP
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\e2e\Collect-E2EEvidence.ps1 -SourceExe "C:\Path\To\Gradient-PC-Health-Check.exe"
+powershell.exe -NoProfile -File .\tools\e2e\Collect-E2EEvidence.ps1 -SourceExe "C:\Path\To\Gradient-PC-Health-Check.exe"
 ```
 
 Скрипт собирает:
@@ -141,7 +141,20 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\e2e\Collect-E2EE
 
 ZIP создаётся на Desktop. Он может содержать имя ПК/пользователя и диагностические данные, поэтому рассматривается как внутренний Service Desk evidence.
 
-## 9. Что прислать разработчику после E2E
+## 9. Очистить E2E test data
+
+После формирования evidence:
+
+```powershell
+powershell.exe -NoProfile -File .\tools\e2e\Cleanup-E2EScenario.ps1
+```
+
+Cleanup удаляет только два жёстко заданных тестовых пути и дополнительно сверяет их перед удалением:
+
+- `%TEMP%\GradientPcHealthCheck-E2E`;
+- `%LOCALAPPDATA%\Gradient\PCHealthCheck\E2E-Outside`.
+
+## 10. Что прислать разработчику после E2E
 
 Достаточно одного ZIP из `Collect-E2EEvidence.ps1` и, если GUI выглядел неправильно, 1–2 скриншотов.
 
@@ -157,7 +170,7 @@ ZIP создаётся на Desktop. Он может содержать имя �
 - junction target затронут;
 - verification report не соответствует фактическому состоянию.
 
-## 10. Gate перед следующим этапом
+## 11. Gate перед следующим этапом
 
 Расширять remediation или считать приложение готовым к пилотному развёртыванию следует только после PASS следующих пунктов:
 
