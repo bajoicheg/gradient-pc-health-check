@@ -24,6 +24,9 @@
     <Deterministic>true</Deterministic>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="assets\g-shield.png" LogicalName="Gradient.PcHealthCheck.g-shield.png" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="System.Diagnostics.EventLog" Version="8.0.0" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
