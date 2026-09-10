@@ -1,36 +1,60 @@
 name: Publish GitHub Release
 
 on:
-  workflow_run:
-    workflows: ["Windows EXE"]
-    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Successful Windows EXE push run on main to publish'
+        required: true
+        type: string
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: pc-health-check-release-${{ github.event.workflow_run.head_sha }}
+  group: pc-health-check-release
   cancel-in-progress: false
 
 jobs:
   release:
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
-      RUN_ID: ${{ github.event.workflow_run.id }}
-      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      RUN_ID: ${{ inputs.run_id }}
     steps:
+      - name: Validate tested build run
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "run_id must be numeric" >&2
+            exit 1
+          fi
+
+          RUN_JSON=$(gh api "repos/$REPO/actions/runs/$RUN_ID")
+          NAME=$(jq -r '.name' <<<"$RUN_JSON")
+          STATUS=$(jq -r '.status' <<<"$RUN_JSON")
+          CONCLUSION=$(jq -r '.conclusion' <<<"$RUN_JSON")
+          EVENT=$(jq -r '.event' <<<"$RUN_JSON")
+          BRANCH=$(jq -r '.head_branch' <<<"$RUN_JSON")
+          HEAD_SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
+
+          [[ "$NAME" == "Windows EXE" ]] || { echo "Unexpected workflow: $NAME" >&2; exit 1; }
+          [[ "$STATUS" == "completed" && "$CONCLUSION" == "success" ]] || { echo "Run is not successful: $STATUS/$CONCLUSION" >&2; exit 1; }
+          [[ "$EVENT" == "push" && "$BRANCH" == "main" ]] || { echo "Run must be a push build on main, got event=$EVENT branch=$BRANCH" >&2; exit 1; }
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid head SHA: $HEAD_SHA" >&2; exit 1; }
+
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "Validated Windows EXE run $RUN_ID at $HEAD_SHA"
+
       - name: Checkout exact tested commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.source.outputs.head_sha }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -55,7 +79,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Download tested EXE artifact
+      - name: Download tested artifacts
         if: steps.exists.outputs.exists == 'false'
         shell: bash
         run: |
@@ -79,17 +103,22 @@ jobs:
           $actual = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($actual -ne $Matches['hash'].ToLowerInvariant()) { throw 'EXE checksum mismatch before release.' }
 
-          $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe.FullName).FileVersion
-          if (-not $fileVersion.StartsWith('${{ steps.version.outputs.version }}', [StringComparison]::Ordinal)) {
-            throw "EXE FileVersion mismatch: $fileVersion"
+          $expectedVersion = [Version]::Parse('${{ steps.version.outputs.version }}.0')
+          $fileVersion = [Version][Diagnostics.FileVersionInfo]::GetVersionInfo($exe.FullName).FileVersion
+          if ($fileVersion -ne $expectedVersion) {
+            throw "EXE FileVersion mismatch: expected=$expectedVersion actual=$fileVersion"
           }
           Write-Host "Release input verified. SHA-256: $actual"
 
       - name: Publish GitHub Release
         if: steps.exists.outputs.exists == 'false'
         shell: bash
+        env:
+          HEAD_SHA: ${{ steps.source.outputs.head_sha }}
         run: |
+          set -euo pipefail
           PILOT_ZIP=$(find release-assets/pilot -maxdepth 1 -type f -name 'Gradient-PC-Health-Check-*-pilot.zip' -print -quit)
+          test -n "$PILOT_ZIP"
           cat > release-notes.md <<'EOF'
           Gradient PC Health Check — Windows 11 Service Desk diagnostics and controlled remediation.
 
@@ -98,8 +127,9 @@ jobs:
           - `Gradient-PC-Health-Check.exe.sha256` — checksum for the EXE;
           - `*-pilot.zip` — optional E2E kit and documentation for pilot verification.
 
-          Administrative remediation is allowed only from the canonical protected path:
+          Administrative remediation (DISM/SFC) is allowed only from the canonical protected path:
           `C:\Program Files\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`.
+          User Temp cleanup runs without elevation in the interactive user's context.
           EOF
 
           gh release create "${{ steps.version.outputs.tag }}" \

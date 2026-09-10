@@ -11,6 +11,7 @@ namespace Gradient.PcHealthCheck;
 public static class RemediationWorker
 {
     private static readonly string[] Allowed = ["CleanTemp", "FlushDns", "Dism", "Sfc"];
+    private static readonly string[] WorkerAllowed = ["FlushDns", "Dism", "Sfc"];
     private const string PipePrefix = "GradientPcHealthCheck-";
     private const string InstalledExeName = "Gradient-PC-Health-Check.exe";
 
@@ -30,9 +31,9 @@ public static class RemediationWorker
             if (!Guid.TryParse(session, out _)) return 20;
             if (!IsValidPipeName(pipeName, session!)) return 24;
             if (!IsValidNonce(nonce)) return 25;
-            if (!TryParseActions(actionsCsv, out var actions)) return 21;
+            if (!TryParseWorkerActions(actionsCsv, out var actions)) return 21;
 
-            var needsAdmin = actions.Any(a => a is "CleanTemp" or "Dism" or "Sfc");
+            var needsAdmin = actions.Any(a => a is "Dism" or "Sfc");
             if (needsAdmin && !DiagnosticsService.IsAdministrator()) return 22;
 
             var profile = DiagnosticsService.GetInteractiveUserProfile();
@@ -86,14 +87,15 @@ public static class RemediationWorker
         if (string.IsNullOrWhiteSpace(profile))
             throw new InvalidOperationException("Не удалось безопасно определить профиль интерактивного пользователя. Действия отменены.");
 
-        var requiresAdmin = selected.Any(x => x.CanAutomate && x.RequiresAdmin);
+        var requiresAdmin = selected.Any(x =>
+            x.CanAutomate && x.RequiresAdmin && ids.Contains(x.Id, StringComparer.OrdinalIgnoreCase));
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Не удалось определить путь к EXE.");
 
         if (requiresAdmin && !IsTrustedElevationLocation(exe))
         {
             throw new InvalidOperationException(
                 "Административные действия разрешены только для проверенной копии Gradient PC Health Check в Program Files. " +
-                "Запуск диагностики из Downloads разрешён, но для CleanTemp/DISM/SFC сначала разверните EXE в " +
+                "Запуск диагностики и очистки Temp пользователя из Downloads разрешён, но для DISM/SFC сначала разверните EXE в " +
                 "%ProgramFiles%\\Gradient\\PCHealthCheck средствами корпоративного управления ПО.");
         }
 
@@ -103,6 +105,13 @@ public static class RemediationWorker
             var localSession = Guid.NewGuid().ToString("D");
             return await Task.Run(() => Execute(localSession, ids, profile, tempDays));
         }
+
+        // User-controlled Temp is intentionally excluded from the elevated worker. It is cleaned
+        // later by the original standard-user process, after privileged actions finish successfully.
+        var workerIds = ids.Where(x => !x.Equals("CleanTemp", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (workerIds.Count == 0)
+            throw new InvalidOperationException("Не выбрано административных действий для elevated worker.");
+        NormalizeOrder(workerIds);
 
         var session = Guid.NewGuid().ToString("D");
         var pipeName = PipePrefix + session;
@@ -116,7 +125,7 @@ public static class RemediationWorker
         var psi = new ProcessStartInfo
         {
             FileName = exe,
-            Arguments = BuildWorkerArguments("--worker", session, string.Join(',', ids), Math.Clamp(tempDays, 1, 30), pipeName, nonce),
+            Arguments = BuildWorkerArguments("--worker", session, string.Join(',', workerIds), Math.Clamp(tempDays, 1, 30), pipeName, nonce),
             UseShellExecute = true,
             Verb = "runas",
             WindowStyle = ProcessWindowStyle.Hidden
@@ -175,7 +184,15 @@ public static class RemediationWorker
             if (!string.Equals(envelope.Result.SessionId, session, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Session ID результата elevated worker не совпадает с запросом.");
 
-            progress?.Report("Административные действия завершены. Запускаю автопроверку…");
+            if (ids.Contains("CleanTemp", StringComparer.OrdinalIgnoreCase))
+            {
+                progress?.Report("Административные действия завершены. Очищаю Temp в контексте пользователя…");
+                var localClean = await Task.Run(() => Execute(
+                    Guid.NewGuid().ToString("D"), ["CleanTemp"], profile, tempDays));
+                MergeInto(envelope.Result, localClean);
+            }
+
+            progress?.Report("Выбранные действия завершены. Запускаю автопроверку…");
             return envelope.Result;
         }
     }
@@ -203,13 +220,13 @@ public static class RemediationWorker
             security);
     }
 
-    private static bool TryParseActions(string? actionsCsv, out List<string> actions)
+    private static bool TryParseWorkerActions(string? actionsCsv, out List<string> actions)
     {
         actions = [];
         var requested = (actionsCsv ?? "")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (requested.Length == 0) return false;
-        if (requested.Any(a => !Allowed.Contains(a, StringComparer.OrdinalIgnoreCase))) return false;
+        if (requested.Any(a => !WorkerAllowed.Contains(a, StringComparer.OrdinalIgnoreCase))) return false;
         actions = requested.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         return actions.Count > 0;
     }
@@ -273,55 +290,73 @@ public static class RemediationWorker
 
     private static RemediationActionResult CleanTemp(string profile, int olderThanDays)
     {
-        var roots = new[]
+        if (DiagnosticsService.IsAdministrator())
         {
-            Path.Combine(profile, "AppData", "Local", "Temp"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp")
-        };
+            return new RemediationActionResult
+            {
+                Id = "CleanTemp",
+                Success = false,
+                Message = "Очистка пользовательского Temp намеренно не выполняется из elevated-процесса. Перезапустите приложение обычным пользователем."
+            };
+        }
+
+        var root = Path.Combine(profile, "AppData", "Local", "Temp");
         var cutoff = DateTime.Now.AddDays(-Math.Abs(olderThanDays));
         long files = 0, bytes = 0;
         var errors = 0;
 
-        foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+        if (!Directory.Exists(root))
         {
-            if (!Directory.Exists(root)) continue;
-            var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
-            if (IsReparsePoint(rootFull))
+            return new RemediationActionResult
             {
-                errors++;
-                continue;
-            }
+                Id = "CleanTemp",
+                Success = true,
+                Message = "Каталог Temp текущего пользователя отсутствует; очистка не требуется."
+            };
+        }
 
-            var stack = new Stack<string>();
-            stack.Push(rootFull);
-            while (stack.Count > 0)
+        var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        if (IsReparsePoint(rootFull))
+        {
+            return new RemediationActionResult
             {
-                var current = stack.Pop();
-                IEnumerable<string> entries;
-                try { entries = Directory.EnumerateFileSystemEntries(current).ToArray(); }
-                catch { errors++; continue; }
+                Id = "CleanTemp",
+                Success = false,
+                Message = "Корень пользовательского Temp является reparse point; очистка отменена."
+            };
+        }
 
-                foreach (var entry in entries)
+        var stack = new Stack<string>();
+        stack.Push(rootFull);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (IsReparsePoint(current)) { errors++; continue; }
+
+            IEnumerable<string> entries;
+            try { entries = Directory.EnumerateFileSystemEntries(current).ToArray(); }
+            catch { errors++; continue; }
+
+            foreach (var entry in entries)
+            {
+                try
                 {
-                    try
+                    var attr = File.GetAttributes(entry);
+                    if ((attr & FileAttributes.ReparsePoint) != 0) continue;
+                    if ((attr & FileAttributes.Directory) != 0)
                     {
-                        var attr = File.GetAttributes(entry);
-                        if ((attr & FileAttributes.ReparsePoint) != 0) continue;
-                        if ((attr & FileAttributes.Directory) != 0)
-                        {
-                            stack.Push(entry);
-                            continue;
-                        }
-
-                        var info = new FileInfo(entry);
-                        if (info.LastWriteTime >= cutoff) continue;
-                        var len = info.Length;
-                        File.Delete(entry);
-                        files++;
-                        bytes += len;
+                        stack.Push(entry);
+                        continue;
                     }
-                    catch { errors++; }
+
+                    var info = new FileInfo(entry);
+                    if (info.LastWriteTime >= cutoff) continue;
+                    var len = info.Length;
+                    File.Delete(entry);
+                    files++;
+                    bytes += len;
                 }
+                catch { errors++; }
             }
         }
 
@@ -331,7 +366,7 @@ public static class RemediationWorker
             Success = true,
             FreedMB = Math.Round(bytes / 1024d / 1024d, 1),
             DeletedFiles = files,
-            Message = $"Удалено файлов: {files}; освобождено {bytes / 1024d / 1024d:0.0} MB; пропущено/ошибок: {errors}."
+            Message = $"Temp текущего пользователя: удалено файлов {files}; освобождено {bytes / 1024d / 1024d:0.0} MB; пропущено/ошибок: {errors}."
         };
     }
 
@@ -372,6 +407,13 @@ public static class RemediationWorker
             Message = p.ExitCode == 0 ? "Команда завершена успешно." : $"Команда завершена с кодом {p.ExitCode}.",
             Output = output
         };
+    }
+
+    private static void MergeInto(RemediationBatchResult target, RemediationBatchResult addition)
+    {
+        target.Actions.AddRange(addition.Actions);
+        if (addition.StartedAt < target.StartedAt) target.StartedAt = addition.StartedAt;
+        if (addition.FinishedAt > target.FinishedAt) target.FinishedAt = addition.FinishedAt;
     }
 
     private static void WriteResult(Stream stream, WorkerEnvelope envelope)

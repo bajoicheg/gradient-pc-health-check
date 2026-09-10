@@ -2,102 +2,126 @@
 
 ## Принципы
 
-1. Диагностика не модифицирует ОС.
-2. GUI не требует elevation для обычного сканирования.
-3. Административные права запрашиваются только после явного выбора инженером действия.
-4. Elevated worker — **тот же EXE**, а не PowerShell/BAT/helper из внешнего каталога.
-5. Privileged worker разрешён только из точного канонического пути `%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`.
-6. Worker принимает только hardcoded allow-list: `CleanTemp`, `FlushDns`, `Dism`, `Sfc`; mixed known/unknown list отклоняется целиком.
-7. Worker не принимает произвольную команду, executable path, каталог удаления или output path.
-8. Для `CleanTemp` профиль интерактивного пользователя определяется самой программой через Windows, а не передаётся непривилегированным caller.
-9. При обходе Temp reparse points/junction/symlink игнорируются; сам корень Temp с атрибутом reparse point не обрабатывается.
-10. Каталоги Temp целиком не удаляются: удаляются только обычные файлы старше порога.
-11. После remediation обязательно выполняется новая диагностика; факт успешного запуска команды не считается подтверждением устранения причины.
-12. Автоматический bootstrap из Downloads/user-writable path отключён до появления Authenticode или другого доверенного механизма доставки.
+1. Диагностика не модифицирует ОС и не требует elevation.
+2. Любая remediation выполняется только после явного выбора инженером и подтверждения списка действий.
+3. `CleanTemp` не является privileged remediation: он работает только с `%LOCALAPPDATA%\Temp` интерактивного пользователя и выполняется только без admin token.
+4. `CleanTemp` не очищает `%WINDIR%\Temp`, не удаляет каталоги целиком, не проходит через reparse points/junction/symlink и не принимается elevated worker-ом.
+5. Elevated worker — тот же EXE, а не PowerShell/BAT/helper из внешнего каталога.
+6. Worker разрешён только из точного канонического пути `%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`.
+7. Worker принимает только hardcoded allow-list `FlushDns`, `Dism`, `Sfc`; `CleanTemp`, unknown и mixed known/unknown списки отклоняются до подключения к IPC.
+8. `Dism` и `Sfc` требуют administrative token. `FlushDns` обычно выполняется локально без elevation; при совместном запуске с privileged action может входить в тот же worker batch.
+9. Worker не принимает произвольную команду, executable path, каталог удаления или output path.
+10. После remediation выполняется новая диагностика; успешный exit code сам по себе не считается подтверждением устранения причины.
+11. Bootstrap/elevation из Downloads или другого user-writable пути отключён.
 
-## Почему bootstrap из Downloads отключён
+## Граница CleanTemp
 
-В 0.3.1–0.3.3 существовал сценарий: standard-user GUI из Downloads запрашивает UAC, elevated bootstrap копирует тот же EXE в Program Files и сверяет SHA-256. Для пилота этот сценарий признан недостаточно сильной границей доверия.
+До 0.3.5 `CleanTemp` выполнялся в elevated worker и рекурсивно обходил пользовательский Temp и `%WINDIR%\Temp`. Даже при проверке reparse-point атрибутов такая схема оставляла TOCTOU-границу: непривилегированный пользователь может изменять собственное дерево каталогов во время обхода privileged процессом.
 
-Причина — pre-UAC race: user-writable путь остаётся изменяемым до момента запуска elevated child. SHA-256, вычисленный уже после elevation, подтверждает лишь то, что **скопированный файл совпадает с файлом, прочитанным elevated bootstrap**, но сам по себе не доказывает, что это именно тот неизменённый бинарник, которому инженер намеревался дать administrative token.
+Начиная с 0.3.5 модель изменена:
 
-Поэтому начиная с 0.3.4:
+- `CleanTemp` выполняется исходным standard-user процессом;
+- область действия — только `%LOCALAPPDATA%\Temp` текущего интерактивного пользователя;
+- elevated worker не содержит `CleanTemp` в своей allow-list;
+- если приложение вручную запущено elevated, `CleanTemp` fail closed и просит перезапустить приложение обычным пользователем;
+- если вместе выбраны `CleanTemp` и `Dism`/`Sfc`, сначала завершается privileged worker, затем `CleanTemp` выполняется исходным непривилегированным parent-процессом;
+- reparse points всё равно пропускаются как defense in depth.
 
-- диагностику разрешено запускать из Downloads без admin token;
-- `CleanTemp`, `Dism`, `Sfc` из user-writable location не запускаются и UAC даже не инициируется;
-- `--bootstrap-worker` fail closed и возвращает отказ;
-- privileged `--worker` отказывается работать вне канонического Program Files path;
-- arbitrary path внутри Program Files также не считается доверенным;
-- на каноническом пути проверяются reparse-point признаки файла и существующих каталогов в цепочке.
+Таким образом user-controlled directory tree больше не обходится с административным токеном.
 
-Перед административной remediation приложение должно быть размещено в Program Files через управляемый корпоративный software deployment или иной доверенный канал.
+## Trusted path и UAC
 
-## UAC и IPC
+Для `Dism`/`Sfc` GUI до показа UAC проверяет собственный путь. Разрешён только:
+
+`%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`
+
+Проверяются:
+
+- точное совпадение нормализованного пути;
+- отсутствие reparse-point у EXE;
+- отсутствие reparse-point у существующих каталогов `Gradient` и `PCHealthCheck` в цепочке.
+
+Из Downloads диагностика, отчёты, `CleanTemp` и `FlushDns` разрешены без elevation. При выборе `Dism`/`Sfc` из Downloads операция отклоняется **до** запуска UAC.
+
+## IPC elevated worker
 
 Перед запуском worker GUI:
 
-- проверяет, что текущий EXE находится по каноническому trusted path;
 - генерирует случайный GUID session id;
 - создаёт локальный named pipe `GradientPcHealthCheck-<GUID>`;
 - генерирует 256-битный случайный nonce;
-- передаёт только session id, allow-listed action IDs, ограниченный Temp age, pipe name и nonce;
-- запускает тот же канонический EXE через `runas` в worker-mode.
+- передаёт только session id, allow-listed action IDs, pipe name и nonce;
+- запускает тот же канонический EXE через `runas`.
 
 Worker:
 
-- первым делом проверяет собственный путь выполнения;
-- проверяет формат session/pipe/nonce;
-- fail closed валидирует полный список действий по hardcoded allow-list;
-- требует административный токен для `CleanTemp`, `Dism`, `Sfc`;
-- подключается к named pipe **до** запуска долгих действий, чтобы GUI быстро мог подтвердить успешное elevation;
-- возвращает JSON только через созданный parent-процессом named pipe;
-- возвращает nonce и session id, которые parent проверяет перед принятием результата.
+- первым делом проверяет собственный canonical path;
+- валидирует session/pipe/nonce;
+- целиком отклоняет список, содержащий `CleanTemp` или неизвестное действие;
+- требует administrative token для `Dism`/`Sfc`;
+- подключается к named pipe до запуска долгих действий;
+- возвращает JSON только через pipe.
+
+Parent принимает результат только при совпадении одноразовых `session id + nonce`.
 
 ### UAC под отдельной admin-учёткой
 
-Service Desk может ввести в UAC не текущую пользовательскую, а отдельную административную учётку. Поэтому DACL named pipe разрешает доступ:
-
-- SID текущего GUI-пользователя;
-- локальной группе `Administrators`.
-
-Это нужно только для IPC. Результат всё равно принимается GUI только при совпадении одноразовых `session id + nonce`. Named pipe не используется для передачи произвольных команд worker-у: privileged action IDs уже находятся в command line и повторно валидируются самим worker.
+Service Desk может ввести в UAC отдельную локальную или доменную admin-учётку. Поэтому DACL named pipe разрешает подключение SID текущего GUI-пользователя и локальной группе `Administrators`. Это разрешение относится только к каналу результата; команды worker получает из собственной командной строки и повторно валидирует по hardcoded allow-list.
 
 ## Осознанно исключено
 
 - `netsh winsock reset` как универсальная remediation;
 - очистка `SoftwareDistribution`;
 - очистка Prefetch;
+- очистка `%WINDIR%\Temp`;
 - автоматический reboot;
 - kill процессов;
 - отключение startup/services;
 - произвольное исполнение команд;
-- загрузка кода/правил remediation из сети;
+- загрузка правил remediation из сети;
 - автоматическое применение DISM/SFC без явной галочки инженера;
 - elevation/bootstrap из user-writable каталога.
 
 ## Развёртывание
 
-Единственный trusted remediation path:
+Канонический trusted path для administrative remediation:
 
 `%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`
 
-Централизованное развёртывание (Kaspersky/Intune/SCCM/другой корпоративный software deployment) — предпочтительный и ожидаемый вариант для пилота. Диагностический scan можно запускать из другого пути, но административные remediation там заблокированы.
+Централизованное развёртывание через корпоративный software deployment — ожидаемый вариант для пилота. Диагностика и непривилегированные действия могут запускаться из другого пути.
 
 ## Supply chain и CI
 
 GitHub Actions:
 
 - pins сторонние Actions на immutable commit SHA;
-- не сохраняет checkout credentials;
+- build workflow имеет только `contents: read` и не сохраняет checkout credentials;
 - фиксирует .NET SDK;
 - проверяет NuGet vulnerabilities, включая transitive packages;
 - собирает с warnings-as-errors;
 - запускает source self-test и self-test опубликованного single-file EXE;
 - проверяет отказ worker из untrusted path;
-- размещает временную CI-копию ровно по каноническому Program Files path и уже там проверяет negative worker cases;
-- проверяет unknown и mixed known/unknown action list, invalid pipe, invalid nonce;
-- сверяет FileVersion и SHA-256 артефакта.
+- проверяет отказ elevated worker для `CleanTemp`, unknown и mixed action list, invalid pipe и invalid nonce;
+- проверяет точную FileVersion и SHA-256 артефакта;
+- генерирует брендовые assets из детерминированного source и проверяет SHA-256 корпоративного shield;
+- проверяет `START-HERE.txt` строгим UTF-8 decoder-ом.
+
+### GitHub Release
+
+Private repository сейчас не использует защищённый `main`, поэтому автоматическая публикация release после любого зелёного push отключена. `Publish GitHub Release` запускается вручную и принимает `run_id` уже завершённого `Windows EXE` workflow.
+
+Перед публикацией workflow проверяет, что указанный run:
+
+- действительно `Windows EXE`;
+- завершён успешно;
+- был событием `push`;
+- выполнялся на `main`;
+- имеет валидный 40-символьный commit SHA.
+
+Затем checkout выполняется на точный tested SHA, артефакты скачиваются именно из указанного run, SHA-256 и FileVersion проверяются повторно, а GitHub Release создаётся с target на этот же SHA.
+
+После появления branch protection для `main` можно вернуть автоматический release trigger.
 
 ## Подпись
 
-CI формирует SHA-256. Authenticode в текущей версии не выполняется, так как сертификат подписи в репозитории отсутствует. Перед широким корпоративным развёртыванием рекомендуется подписывать release EXE корпоративным code-signing сертификатом и проверять publisher средствами AppLocker/WDAC/EDR.
+CI формирует SHA-256. Authenticode в 0.3.5 не выполняется, так как code-signing certificate отсутствует в release pipeline. Перед широким корпоративным развёртыванием рекомендуется подписывать EXE корпоративным code-signing сертификатом и проверять publisher средствами AppLocker/WDAC/EDR.

@@ -29,7 +29,7 @@ public sealed class AssessmentService
         if (systemDrive is not null)
         {
             if (systemDrive.FreePercent <= Thresholds.SystemDiskCriticalFreePercent || systemDrive.FreeGB <= Thresholds.SystemDiskCriticalFreeGB)
-                Add("CRIT", "Диск", "Критически мало места на системном диске", $"{systemDrive.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%)", "Освободите место. Temp можно очистить безопасной remediation.", 15);
+                Add("CRIT", "Диск", "Критически мало места на системном диске", $"{systemDrive.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%)", "Освободите место. Temp текущего пользователя можно очистить безопасной remediation без elevation.", 15);
             else if (systemDrive.FreePercent <= Thresholds.SystemDiskWarnFreePercent || systemDrive.FreeGB <= Thresholds.SystemDiskWarnFreeGB)
                 Add("WARN", "Диск", "Мало места на системном диске", $"{systemDrive.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%)", "Проверьте крупные данные и временные файлы.", 7);
             else Add("OK", "Диск", "Свободное место на системном диске", $"{systemDrive.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%)", "Запас свободного места нормальный.", 0);
@@ -110,12 +110,12 @@ public sealed class AssessmentService
         {
             Id = "CleanTemp",
             Kind = tempCleanupRecommended ? "Рекомендуется" : "Дополнительно",
-            Title = "Очистить старые временные файлы",
+            Title = "Очистить старые временные файлы пользователя",
             Reason = tempCleanupRecommended
-                ? $"На системном диске свободно {systemDrive!.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%). Удаляются только Temp-файлы старше {Thresholds.TempOlderThanDays} дней; Prefetch не затрагивается."
-                : $"Свободного места достаточно, поэтому очистка не рекомендуется автоматически. Инженер может выполнить её вручную: удаляются только Temp-файлы старше {Thresholds.TempOlderThanDays} дней; Prefetch не затрагивается.",
+                ? $"На системном диске свободно {systemDrive!.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%). Удаляются только обычные файлы из Temp текущего пользователя старше {Thresholds.TempOlderThanDays} дней; reparse points и Prefetch не затрагиваются."
+                : $"Свободного места достаточно, поэтому очистка не рекомендуется автоматически. Инженер может запустить её вручную: удаляются только обычные файлы из Temp текущего пользователя старше {Thresholds.TempOlderThanDays} дней; reparse points и Prefetch не затрагиваются.",
             CanAutomate = true,
-            RequiresAdmin = true,
+            RequiresAdmin = false,
             Preselected = tempCleanupRecommended,
             Risk = "Низкий",
             Verification = "Зафиксировать количество удалённых файлов/освобождённый объём и повторно измерить свободное место."

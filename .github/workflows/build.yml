@@ -92,7 +92,7 @@ jobs:
             [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $target).Path, [ref]$tokens, [ref]$parseErrors)
             if (@($parseErrors).Count -gt 0) {
               $details = @($parseErrors) | ForEach-Object { "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }
-              throw "PowerShell parse errors in $target: $($details -join ' | ')"
+              throw "PowerShell parse errors in ${target}: $($details -join ' | ')"
             }
           }
 
@@ -188,6 +188,9 @@ jobs:
             $p = Start-Process -FilePath $installed -ArgumentList @('--worker','--session',$session,'--actions','DefinitelyNotAllowed','--temp-days','3','--pipe',$pipe,'--nonce',$nonce) -Wait -PassThru
             if ($p.ExitCode -ne 21) { throw "Unknown action was not rejected as expected. Exit code: $($p.ExitCode)" }
 
+            $p = Start-Process -FilePath $installed -ArgumentList @('--worker','--session',$session,'--actions','CleanTemp','--temp-days','3','--pipe',$pipe,'--nonce',$nonce) -Wait -PassThru
+            if ($p.ExitCode -ne 21) { throw "CleanTemp was accepted by elevated worker. Exit code: $($p.ExitCode)" }
+
             $p = Start-Process -FilePath $installed -ArgumentList @('--worker','--session',$session,'--actions','FlushDns,DefinitelyNotAllowed','--temp-days','3','--pipe',$pipe,'--nonce',$nonce) -Wait -PassThru
             if ($p.ExitCode -ne 21) { throw "Mixed known/unknown action list did not fail closed. Exit code: $($p.ExitCode)" }
 
@@ -216,11 +219,12 @@ jobs:
           if ($unexpected) { throw "Single-file gate failed: $($unexpected.Name -join ', ')" }
 
           [xml]$project = Get-Content src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
-          $expectedVersion = [string]$project.Project.PropertyGroup.Version
-          $actualFileVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe.FullName).FileVersion
-          if ([string]::IsNullOrWhiteSpace($expectedVersion)) { throw 'Project Version is empty.' }
-          if (-not $actualFileVersion.StartsWith($expectedVersion, [StringComparison]::Ordinal)) {
-            throw "File version mismatch. Project=$expectedVersion EXE=$actualFileVersion"
+          $projectVersion = [string]$project.Project.PropertyGroup.Version
+          $actualFileVersion = [Version][System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe.FullName).FileVersion
+          if ([string]::IsNullOrWhiteSpace($projectVersion)) { throw 'Project Version is empty.' }
+          $expectedFileVersion = [Version]::Parse("$projectVersion.0")
+          if ($actualFileVersion -ne $expectedFileVersion) {
+            throw "File version mismatch. Expected=$expectedFileVersion EXE=$actualFileVersion"
           }
 
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -259,9 +263,10 @@ jobs:
           if (-not (Test-Path (Join-Path $verify 'e2e\Analyze-E2EEvidence.ps1'))) { throw 'Evidence analyzer missing.' }
           $toolCount = @(Get-ChildItem (Join-Path $verify 'e2e') -Filter '*.ps1' -File).Count
           if ($toolCount -lt 5) { throw "Expected at least 5 E2E tools in pilot bundle, found $toolCount." }
-          $startHereText = [IO.File]::ReadAllText((Join-Path $verify 'START-HERE.txt'), [Text.UTF8Encoding]::new($true))
+          $strictUtf8Bom = [Text.UTF8Encoding]::new($true, $true)
+          $startHereText = [IO.File]::ReadAllText((Join-Path $verify 'START-HERE.txt'), $strictUtf8Bom)
           if (-not $startHereText.Contains('Сверьте SHA-256') -or -not $startHereText.Contains('Диагностику можно запускать')) {
-            throw 'Packaged START-HERE UTF-8 verification failed.'
+            throw 'Packaged START-HERE strict UTF-8 verification failed.'
           }
           Write-Host "Pilot bundle verified: $($pilotZip.Name)"
 

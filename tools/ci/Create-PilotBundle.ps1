@@ -29,7 +29,7 @@ $projectPath = Resolve-RequiredFile -Path '.\src\Gradient.PcHealthCheck\Gradient
 
 [xml]$project = Get-Content -LiteralPath $projectPath -Raw
 $version = [string]$project.Project.PropertyGroup.Version
-if ([string]::IsNullOrWhiteSpace($version) -or $version -notmatch '^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
+if ([string]::IsNullOrWhiteSpace($version) -or $version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Unexpected project version: $version"
 }
 
@@ -48,9 +48,10 @@ if (-not [string]::Equals($actualHash, $expectedHash, [StringComparison]::Ordina
     throw "EXE SHA-256 mismatch. Expected=$expectedHash Actual=$actualHash"
 }
 
-$fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).FileVersion
-if ([string]::IsNullOrWhiteSpace($fileVersion) -or -not $fileVersion.StartsWith($version, [StringComparison]::Ordinal)) {
-    throw "EXE FileVersion does not match project version. Project=$version EXE=$fileVersion"
+$fileVersion = [Version][Diagnostics.FileVersionInfo]::GetVersionInfo($exe).FileVersion
+$expectedFileVersion = [Version]::Parse("$version.0")
+if ($fileVersion -ne $expectedFileVersion) {
+    throw "EXE FileVersion does not match project version. Expected=$expectedFileVersion EXE=$fileVersion"
 }
 
 $requiredFiles = @(
@@ -90,12 +91,15 @@ $manifest = [ordered]@{
     schemaVersion = 1
     product = 'Gradient PC Health Check'
     version = $version
-    fileVersion = $fileVersion
+    fileVersion = $fileVersion.ToString()
     architecture = 'win-x64'
     sha256 = $actualHash
     gitSha = if ([string]::IsNullOrWhiteSpace($GitSha)) { $null } else { $GitSha }
     packagedAtUtc = [DateTime]::UtcNow.ToString('o')
     trustedRemediationPath = '%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe'
+    privilegedActions = @('Dism','Sfc')
+    cleanTempScope = '%LOCALAPPDATA%\Temp'
+    cleanTempElevated = $false
     bootstrapFromDownloads = $false
     contents = [ordered]@{
         executable = 'Gradient-PC-Health-Check.exe'
@@ -117,10 +121,12 @@ Gradient PC Health Check $version — PILOT / E2E
    .\docs\E2E-TEST-PLAN.md
 
 3. Диагностику можно запускать из этого каталога без прав администратора.
-   Административные remediation из Downloads/распакованного пользовательского каталога намеренно заблокированы.
+   CleanTemp также работает без elevation и удаляет только старые обычные файлы из %LOCALAPPDATA%\Temp текущего пользователя.
+   Elevated worker CleanTemp не принимает.
 
-4. Для CleanTemp/DISM/SFC проверенный EXE должен быть заранее размещён по пути:
+4. Для DISM/SFC проверенный EXE должен быть заранее размещён по пути:
    %ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe
+   Только эти действия инициируют UAC.
 
 5. После E2E соберите ZIP через e2e\Collect-E2EEvidence.ps1 и проверьте его через e2e\Analyze-E2EEvidence.ps1.
 
@@ -132,12 +138,13 @@ Git SHA: $(if ([string]::IsNullOrWhiteSpace($GitSha)) { 'not supplied' } else { 
 
 # Explicit BOM avoids mojibake in Windows editors that still auto-detect this file as ANSI.
 $startHerePath = Join-Path $stage 'START-HERE.txt'
-[IO.File]::WriteAllText($startHerePath, $startHere, [Text.UTF8Encoding]::new($true))
+[IO.File]::WriteAllText($startHerePath, $startHere, [Text.UTF8Encoding]::new($true, $true))
 
-# Verify that the Russian text round-trips correctly before publishing the package.
-$roundTrip = [IO.File]::ReadAllText($startHerePath, [Text.UTF8Encoding]::new($true))
+# Strict decoding rejects malformed UTF-8 instead of silently replacing invalid byte sequences.
+$strictUtf8Bom = [Text.UTF8Encoding]::new($true, $true)
+$roundTrip = [IO.File]::ReadAllText($startHerePath, $strictUtf8Bom)
 if (-not $roundTrip.Contains('Сверьте SHA-256') -or -not $roundTrip.Contains('Диагностику можно запускать')) {
-    throw 'START-HERE UTF-8 verification failed.'
+    throw 'START-HERE strict UTF-8 verification failed.'
 }
 
 # Verify the staged executable again before archiving.

@@ -78,7 +78,14 @@ public sealed class MainForm : Form
     {
         var p = Card();
         p.Margin = new Padding(0, 0, 0, 10);
-        var logo = new ShieldLogo { Location = new Point(13, 8), Size = new Size(58, 64), BackColor = Color.White };
+        var logo = new PictureBox
+        {
+            Location = new Point(13, 8),
+            Size = new Size(58, 64),
+            BackColor = Color.White,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Image = BrandAssets.LoadShield()
+        };
         p.Controls.Add(logo);
         p.Controls.Add(new Label { Text = "Gradient PC Health Check", Font = new Font("Segoe UI Semibold", 18F), ForeColor = Navy, AutoSize = true, Location = new Point(86, 13) });
         p.Controls.Add(new Label { Text = "Service Desk · диагностика и контролируемые действия для Windows 11", ForeColor = Muted, AutoSize = true, Location = new Point(88, 49) });
@@ -169,7 +176,7 @@ public sealed class MainForm : Form
         _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", HeaderText = "Provider", ValueType = typeof(string), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
         _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id", HeaderText = "Event ID", ValueType = typeof(int), SortMode = DataGridViewColumnSortMode.Automatic });
         _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Count", HeaderText = "Количество", ValueType = typeof(int), SortMode = DataGridViewColumnSortMode.Automatic });
-        _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Last", HeaderText = "Последнее", ValueType = typeof(DateTime), SortMode = DataGridViewColumnSortMode.Automatic, DefaultCellStyle = new DataGridViewCellStyle { Format = "dd.MM HH:mm:ss" } });
+        _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Last", HeaderText = "Последнее", ValueType = typeof(DateTime), SortMode = DataGridViewColumnSortMode.Automatic, DefaultCellStyle = new DataGridViewCellStyle { Format = "dd.MM HH:mm:ss", NullValue = "" } });
         page.Controls.Add(_events);
         return page;
     }
@@ -315,7 +322,7 @@ public sealed class MainForm : Form
 
         FillProcesses(_topCpu, d.TopCpu); FillProcesses(_topRam, d.TopMemory); FillProcesses(_topIo, d.TopIo);
         _events.Rows.Clear();
-        foreach (var e in d.Events.Top) _events.Rows.Add(e.Log, e.Provider, e.EventId, e.Count, e.LastSeen ?? DateTime.MinValue);
+        foreach (var e in d.Events.Top) _events.Rows.Add(e.Log, e.Provider, e.EventId, e.Count, e.LastSeen);
         PopulateSystem(d);
     }
 

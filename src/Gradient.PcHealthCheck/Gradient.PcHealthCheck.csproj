@@ -7,7 +7,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Gradient-PC-Health-Check</AssemblyName>
     <RootNamespace>Gradient.PcHealthCheck</RootNamespace>
-    <ApplicationIcon>assets\gpchc.ico</ApplicationIcon>
+    <GeneratedBrandDir>$(MSBuildProjectDirectory)\obj\brand</GeneratedBrandDir>
+    <ApplicationIcon>$(GeneratedBrandDir)\gpchc.ico</ApplicationIcon>
     <Version>0.3.5</Version>
     <FileVersion>0.3.5.0</FileVersion>
     <AssemblyVersion>0.3.5.0</AssemblyVersion>
@@ -23,8 +24,15 @@
     <DebugSymbols>false</DebugSymbols>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
+
+  <Target Name="GenerateBrandAssets" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec
+      Command="powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tools\branding\Generate-BrandAssets.ps1 -OutputDirectory &quot;$(GeneratedBrandDir)&quot;"
+      WorkingDirectory="$(MSBuildProjectDirectory)\..\.." />
+  </Target>
+
   <ItemGroup>
-    <EmbeddedResource Include="assets\g-shield.png" LogicalName="Gradient.PcHealthCheck.g-shield.png" />
+    <EmbeddedResource Include="$(GeneratedBrandDir)\g-shield.png" LogicalName="Gradient.PcHealthCheck.g-shield.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />
