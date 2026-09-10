@@ -33,7 +33,7 @@ public static class RemediationWorker
             if (!IsValidNonce(nonce)) return 25;
             if (!TryParseWorkerActions(actionsCsv, out var actions)) return 21;
 
-            var needsAdmin = actions.Any(a => a is "Dism" or "Sfc");
+            var needsAdmin = actions.Any(RequiresAdministrator);
             if (needsAdmin && !DiagnosticsService.IsAdministrator()) return 22;
 
             var profile = DiagnosticsService.GetInteractiveUserProfile();
@@ -87,8 +87,8 @@ public static class RemediationWorker
         if (string.IsNullOrWhiteSpace(profile))
             throw new InvalidOperationException("Не удалось безопасно определить профиль интерактивного пользователя. Действия отменены.");
 
-        var requiresAdmin = selected.Any(x =>
-            x.CanAutomate && x.RequiresAdmin && ids.Contains(x.Id, StringComparer.OrdinalIgnoreCase));
+        // Privilege is a security property of the hardcoded action ID, not trusted UI/model metadata.
+        var requiresAdmin = ids.Any(RequiresAdministrator);
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Не удалось определить путь к EXE.");
 
         if (requiresAdmin && !IsTrustedElevationLocation(exe))
@@ -230,6 +230,10 @@ public static class RemediationWorker
         actions = requested.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         return actions.Count > 0;
     }
+
+    private static bool RequiresAdministrator(string actionId)
+        => actionId.Equals("Dism", StringComparison.OrdinalIgnoreCase)
+           || actionId.Equals("Sfc", StringComparison.OrdinalIgnoreCase);
 
     private static string BuildWorkerArguments(string mode, string session, string actions, int tempDays, string pipeName, string nonce)
         => $"{mode} --session {Quote(session)} --actions {Quote(actions)} --temp-days {tempDays} --pipe {Quote(pipeName)} --nonce {Quote(nonce)}";
