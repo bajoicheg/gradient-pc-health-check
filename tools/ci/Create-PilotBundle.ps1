@@ -129,7 +129,16 @@ FileVersion: $fileVersion
 SHA-256: $actualHash
 Git SHA: $(if ([string]::IsNullOrWhiteSpace($GitSha)) { 'not supplied' } else { $GitSha })
 "@
-Set-Content -LiteralPath (Join-Path $stage 'START-HERE.txt') -Value $startHere -Encoding UTF8
+
+# Explicit BOM avoids mojibake in Windows editors that still auto-detect this file as ANSI.
+$startHerePath = Join-Path $stage 'START-HERE.txt'
+[IO.File]::WriteAllText($startHerePath, $startHere, [Text.UTF8Encoding]::new($true))
+
+# Verify that the Russian text round-trips correctly before publishing the package.
+$roundTrip = [IO.File]::ReadAllText($startHerePath, [Text.UTF8Encoding]::new($true))
+if (-not $roundTrip.Contains('Сверьте SHA-256') -or -not $roundTrip.Contains('Диагностику можно запускать')) {
+    throw 'START-HERE UTF-8 verification failed.'
+}
 
 # Verify the staged executable again before archiving.
 $stagedExe = Join-Path $stage 'Gradient-PC-Health-Check.exe'
