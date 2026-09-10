@@ -1,0 +1,21 @@
+# Changelog
+
+## 0.3.5 — Service Desk UX, remediation boundary and Releases
+
+Изменения по результатам первого запуска 0.3.4 на реальном Windows 11 ПК и security review PR #11:
+
+- `CleanTemp` всегда присутствует в списке действий; автоматически рекомендуется и выбирается только при недостатке места на системном диске.
+- `CleanTemp` перенесён за пределы privileged boundary: очищается только `%LOCALAPPDATA%\Temp` текущего пользователя, без elevation; `%WINDIR%\Temp` больше не затрагивается.
+- elevated worker больше не принимает `CleanTemp`; при ручном запуске GUI elevated пользовательская очистка fail closed. Это устраняет privileged traversal user-controlled directory tree и связанный junction/TOCTOU риск.
+- при совместном выборе `CleanTemp` и DISM/SFC privileged действия выполняются через worker, после чего `CleanTemp` запускается исходным standard-user parent-процессом.
+- `Применить выбранное` активно только при выборе автоматизируемого действия и показывает количество выбранных действий; ручные рекомендации нельзя ошибочно применить.
+- PID, CPU, RAM и I/O сортируются по числовому значению; Event ID и Count — как числа; timestamp — как дата/время без фиктивного `DateTime.MinValue` при отсутствии значения.
+- `START-HERE.txt` pilot-пакета записывается UTF-8 BOM и проверяется strict UTF-8 decoder-ом.
+- исправлен PowerShell parser gate CI (`${target}:` вместо невалидного `$target:`).
+- корпоративный G-shield и зелёная application icon генерируются детерминированно из versioned source; GUI использует встроенный реальный shield.
+- временный self-modifying workflow `Finalize 0.3.5 branding` удалён.
+- `Publish GitHub Release` переведён с автоматического `workflow_run` на ручной `workflow_dispatch` с обязательным `run_id` успешного `Windows EXE` push-run на `main`.
+- release workflow checkout-ит точный tested SHA, скачивает артефакты только указанного run и повторно проверяет SHA-256 и точную FileVersion перед публикацией.
+- версия приложения: `0.3.5`.
+
+Administrative remediation (`DISM`, `SFC`) по-прежнему разрешена только из точного canonical Program Files path; bootstrap/elevation из Downloads отключён.

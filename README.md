@@ -1,0 +1,98 @@
+# Gradient PC Health Check
+
+Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
+
+Current release: **0.3.5**. The application is a self-contained single-file `Gradient-PC-Health-Check.exe`.
+
+> **Security / privacy:** never attach an unreviewed `Gradient-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
+
+## What 0.3.5 does
+
+- collects CPU, RAM, logical/physical disk, Windows/build, process, Event Log, startup, security-product, network and Windows Update signals;
+- calculates diagnostic coverage so missing telemetry is not shown as “healthy”;
+- samples CPU and disk queue repeatedly and uses the median to reduce transient false positives;
+- groups repeated Windows events by Provider/Event ID;
+- sorts process/event numeric columns using typed values rather than formatted strings;
+- creates HTML/JSON before/after reports;
+- offers only an explicit allow-list of automated remediation actions.
+
+## Remediation security boundary
+
+### Non-privileged
+
+The following can run from a normal user context:
+
+- diagnostics and reports;
+- `CleanTemp` — only old ordinary files under `%LOCALAPPDATA%\Temp` of the interactive user;
+- `FlushDns`.
+
+`CleanTemp` does not clean `%WINDIR%\Temp`, Prefetch or other system directories, does not traverse reparse points/junctions/symlinks, and fails closed if the GUI itself is already elevated.
+
+### Administrative
+
+`DISM /Online /Cleanup-Image /RestoreHealth` and `SFC /scannow` require UAC. The elevated worker is allowed to run only from the exact canonical path:
+
+`%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`
+
+The privileged worker:
+
+- validates the canonical executable path and rejects reparse points;
+- accepts only the hardcoded action IDs `FlushDns`, `Dism`, `Sfc`;
+- does **not** accept `CleanTemp`;
+- rejects unknown and mixed known/unknown action lists;
+- uses a one-time session ID + nonce over a local named pipe;
+- keeps legacy bootstrap from user-writable locations disabled.
+
+Detailed model: [`docs/SECURITY.md`](docs/SECURITY.md).
+
+## Build and CI
+
+`Windows EXE` runs on pushes to `main`, pull requests and manual dispatch. It uses read-only repository permissions and pinned GitHub Actions. The pipeline includes:
+
+- PowerShell parser/smoke gates;
+- deterministic brand-asset generation and SHA-256 provenance check;
+- .NET restore and NuGet vulnerability audit including transitive dependencies;
+- warnings-as-errors build;
+- source and published-single-EXE self-tests;
+- privileged-worker negative security tests;
+- exact FileVersion verification;
+- SHA-256 generation;
+- pilot-bundle creation and strict UTF-8 validation.
+
+## Release model
+
+A successful `Windows EXE` **push build on `main`** triggers `Publish GitHub Release`. The release workflow has the write permission required to create the GitHub Release, but re-validates that its triggering run is a successful `push` on `main`, checks out the exact tested SHA, downloads artifacts from that exact run and re-verifies the EXE checksum before publishing.
+
+Existing release tags are never overwritten automatically.
+
+For a public repository, `main` should be protected with a branch ruleset requiring Pull Requests and successful CI before merge.
+
+## Building locally
+
+Prerequisites: Windows 11 x64 and .NET 8 SDK.
+
+```powershell
+dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
+dotnet build src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -warnaserror
+dotnet run --project src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -- --selftest
+```
+
+Single-file publish:
+
+```powershell
+dotnet publish src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish
+```
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Public bug reports must use synthetic or redacted data. Security vulnerabilities should be reported privately as described in [`SECURITY.md`](SECURITY.md).
+
+## License and branding
+
+Source code is licensed under the **Apache License 2.0**; see [`LICENSE`](LICENSE).
+
+The Gradient name, G-shield artwork and related branding assets are **not** granted under Apache-2.0 and remain reserved to their respective owner(s). See [`NOTICE`](NOTICE) for the branding exception.
+
+## Code signing
+
+0.3.5 publishes SHA-256 checksums but is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
