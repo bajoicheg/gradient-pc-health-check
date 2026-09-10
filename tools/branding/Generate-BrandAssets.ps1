@@ -62,10 +62,10 @@ function Convert-ToGreenVariant {
             $p=$Source.GetPixel($x,$y)
             if($p.A -eq 0){$result.SetPixel($x,$y,$p);continue}
             $hsv=Convert-RgbToHsv $p.R $p.G $p.B
-            # Preserve white/gray/near-black details. Re-hue only visibly chromatic pixels.
-            if($hsv[1] -ge 0.18 -and $hsv[2] -ge 0.12) {
-                $s=[Math]::Min(1.0,[Math]::Max(0.35,$hsv[1]))
-                $result.SetPixel($x,$y,(Convert-HsvToColor 142.0 $s $hsv[2] $p.A))
+            # Preserve white/gray details. Re-hue only visibly chromatic pixels.
+            if($hsv[1] -ge 0.12 -and $hsv[2] -ge 0.10) {
+                $s=[Math]::Min(1.0,[Math]::Max(0.58,$hsv[1]))
+                $result.SetPixel($x,$y,(Convert-HsvToColor 133.0 $s $hsv[2] $p.A))
             } else {
                 $result.SetPixel($x,$y,$p)
             }
@@ -93,7 +93,7 @@ function New-SquarePngBytes {
             $g.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $g.SmoothingMode=[Drawing.Drawing2D.SmoothingMode]::HighQuality
             $g.PixelOffsetMode=[Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-            $scale=[Math]::Min($Size/$Source.Width,$Size/$Source.Height)
+            $scale=[Math]::Min(($Size*0.90)/$Source.Width,($Size*0.90)/$Source.Height)
             $w=[int][Math]::Round($Source.Width*$scale)
             $h=[int][Math]::Round($Source.Height*$scale)
             $x=[int](($Size-$w)/2); $y=[int](($Size-$h)/2)
@@ -124,12 +124,11 @@ function Write-MultiSizeIco {
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $shieldBytes=Resolve-SourceBase64 '.\tools\branding\source\g-shield.png.b64'
-$appIconBytes=Resolve-SourceBase64 '.\tools\branding\source\g-switcher-app-icon-src.png.b64'
-
 $shieldPath=Join-Path $OutputDirectory 'g-shield.png'
 Write-Bytes $shieldBytes $shieldPath
 
-$sourceStream=[IO.MemoryStream]::new($appIconBytes,$false)
+# The in-app shield stays byte-identical to G-switcher. Only the executable icon is re-hued.
+$sourceStream=[IO.MemoryStream]::new($shieldBytes,$false)
 try {
     $sourceImage=[Drawing.Image]::FromStream($sourceStream,$true,$true)
     try {
@@ -137,17 +136,16 @@ try {
         try {
             $green=Convert-ToGreenVariant $sourceBitmap
             try {
-                $greenPng=Join-Path $OutputDirectory 'gpchc-icon-green.png'
-                Write-Bytes (Get-PngBytes $green) $greenPng
+                Write-Bytes (Get-PngBytes $green) (Join-Path $OutputDirectory 'gpchc-icon-green.png')
                 Write-MultiSizeIco $green (Join-Path $OutputDirectory 'gpchc.ico')
             } finally { $green.Dispose() }
         } finally { $sourceBitmap.Dispose() }
     } finally { $sourceImage.Dispose() }
 } finally { $sourceStream.Dispose() }
 
-# Integrity/provenance gates: the shield must remain byte-identical to the G-switcher source.
+# Provenance gate: this is the exact source file from bajoicheg/g-switcher assets/g-shield.png.
 $shieldHash=(Get-FileHash -LiteralPath $shieldPath -Algorithm SHA256).Hash.ToLowerInvariant()
-if($shieldHash -ne '2fc86dc6b4a8f98e0e399f552b3cf21defdd990ccbd4039198dc272221547f4a') {
+if($shieldHash -ne '5157c5cf83a6cfddb74c51701a693e401e36b400812505a1e46e15d760c72877') {
     throw "Corporate shield SHA-256 mismatch: $shieldHash"
 }
 
