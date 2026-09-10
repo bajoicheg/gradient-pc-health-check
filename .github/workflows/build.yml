@@ -47,7 +47,7 @@ jobs:
           Write-Host "PowerShell parser gate passed for $($scripts.Count) scripts."
 
           try {
-            & powershell.exe -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Prepare-CleanTempScenario.ps1
+            & pwsh -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Prepare-CleanTempScenario.ps1
             if ($LASTEXITCODE -ne 0) { throw "Prepare-CleanTempScenario failed with exit code $LASTEXITCODE" }
 
             $root = Join-Path $env:TEMP 'GradientPcHealthCheck-E2E'
@@ -61,34 +61,54 @@ jobs:
             # Simulate only the observable effect of successful CleanTemp on our dedicated old sentinel.
             # The real application's remediation is deliberately not invoked against the shared runner Temp.
             Remove-Item -LiteralPath $old -Force
-            & powershell.exe -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Verify-CleanTempScenario.ps1
+            & pwsh -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Verify-CleanTempScenario.ps1
             if ($LASTEXITCODE -ne 0) { throw "Verify-CleanTempScenario failed with exit code $LASTEXITCODE" }
 
             $evidenceOut = Join-Path $env:RUNNER_TEMP 'gpchc-e2e-evidence'
             New-Item -ItemType Directory -Force -Path $evidenceOut | Out-Null
-            & powershell.exe -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Collect-E2EEvidence.ps1 -OutputDirectory $evidenceOut -LatestReportFiles 2
+            & pwsh -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Collect-E2EEvidence.ps1 -OutputDirectory $evidenceOut -LatestReportFiles 2
             if ($LASTEXITCODE -ne 0) { throw "Collect-E2EEvidence failed with exit code $LASTEXITCODE" }
             $zip = Get-ChildItem $evidenceOut -Filter 'Gradient-PC-Health-Check-E2E-*.zip' -File | Select-Object -First 1
             if ($null -eq $zip -or $zip.Length -le 0) { throw 'Evidence collector did not create a non-empty ZIP.' }
           }
           finally {
-            & powershell.exe -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Cleanup-E2EScenario.ps1
+            & pwsh -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Cleanup-E2EScenario.ps1
             if ($LASTEXITCODE -ne 0) { throw "Cleanup-E2EScenario failed with exit code $LASTEXITCODE" }
             if (Test-Path (Join-Path $env:TEMP 'GradientPcHealthCheck-E2E')) { throw 'E2E Temp root remains after cleanup.' }
           }
 
           Write-Host 'E2E PowerShell tools smoke passed.'
 
-      - name: Pilot packager parser gate
+      - name: PowerShell parser gates
         shell: pwsh
         run: |
-          $tokens = $null
-          $parseErrors = $null
-          [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path .\tools\ci\Create-PilotBundle.ps1).Path, [ref]$tokens, [ref]$parseErrors)
-          if (@($parseErrors).Count -gt 0) {
-            $details = @($parseErrors) | ForEach-Object { "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }
-            throw "Pilot packager parse errors: $($details -join ' | ')"
+          $targets = @(
+            '.\tools\ci\Create-PilotBundle.ps1',
+            '.\tools\branding\Generate-BrandAssets.ps1'
+          )
+          foreach ($target in $targets) {
+            $tokens = $null
+            $parseErrors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $target).Path, [ref]$tokens, [ref]$parseErrors)
+            if (@($parseErrors).Count -gt 0) {
+              $details = @($parseErrors) | ForEach-Object { "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }
+              throw "PowerShell parse errors in $target: $($details -join ' | ')"
+            }
           }
+
+      - name: Generate and verify brand assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\tools\branding\Generate-BrandAssets.ps1
+          $shield = '.\src\Gradient.PcHealthCheck\assets\g-shield.png'
+          $icon = '.\src\Gradient.PcHealthCheck\assets\gpchc.ico'
+          $shieldHash = (Get-FileHash $shield -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($shieldHash -ne '5157c5cf83a6cfddb74c51701a693e401e36b400812505a1e46e15d760c72877') {
+            throw "Corporate shield provenance mismatch: $shieldHash"
+          }
+          if ((Get-Item $icon).Length -lt 4096) { throw 'Generated application icon is unexpectedly small.' }
+          Write-Host "Corporate G-switcher shield verified: $shieldHash"
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
@@ -214,12 +234,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          & powershell.exe -NoLogo -NoProfile -NonInteractive -File .\tools\ci\Create-PilotBundle.ps1 `
+          .\tools\ci\Create-PilotBundle.ps1 `
             -ExePath .\artifacts\final\Gradient-PC-Health-Check.exe `
             -ChecksumPath .\artifacts\final\Gradient-PC-Health-Check.exe.sha256 `
             -OutputDirectory .\artifacts\pilot `
             -GitSha $env:GITHUB_SHA
-          if ($LASTEXITCODE -ne 0) { throw "Pilot packager failed with exit code $LASTEXITCODE" }
 
           $pilotZip = Get-ChildItem .\artifacts\pilot -Filter 'Gradient-PC-Health-Check-*-pilot.zip' -File | Select-Object -First 1
           if ($null -eq $pilotZip -or $pilotZip.Length -le 0) { throw 'Pilot bundle ZIP missing or empty.' }
@@ -240,6 +259,10 @@ jobs:
           if (-not (Test-Path (Join-Path $verify 'e2e\Analyze-E2EEvidence.ps1'))) { throw 'Evidence analyzer missing.' }
           $toolCount = @(Get-ChildItem (Join-Path $verify 'e2e') -Filter '*.ps1' -File).Count
           if ($toolCount -lt 5) { throw "Expected at least 5 E2E tools in pilot bundle, found $toolCount." }
+          $startHereText = [IO.File]::ReadAllText((Join-Path $verify 'START-HERE.txt'), [Text.UTF8Encoding]::new($true))
+          if (-not $startHereText.Contains('Сверьте SHA-256') -or -not $startHereText.Contains('Диагностику можно запускать')) {
+            throw 'Packaged START-HERE UTF-8 verification failed.'
+          }
           Write-Host "Pilot bundle verified: $($pilotZip.Name)"
 
       - name: Upload EXE
