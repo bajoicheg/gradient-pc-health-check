@@ -8,14 +8,16 @@ Set-StrictMode -Version Latest
 
 Add-Type -AssemblyName System.Drawing
 
-function Resolve-SourceBase64 {
-    param([string]$Path)
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Brand source not found: $Path" }
-    $text = Get-Content -LiteralPath $Path -Raw -Encoding ASCII
+function Resolve-SourceBase64Parts {
+    param([string]$Directory)
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) { throw "Brand source directory not found: $Directory" }
+    $parts = @(Get-ChildItem -LiteralPath $Directory -Filter 'part-*' -File | Sort-Object Name)
+    if ($parts.Count -lt 1) { throw "Brand source chunks not found: $Directory" }
+    $text = ($parts | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding ASCII }) -join ''
     $text = $text -replace '\s',''
-    if ([string]::IsNullOrWhiteSpace($text)) { throw "Brand source is empty: $Path" }
+    if ([string]::IsNullOrWhiteSpace($text)) { throw "Brand source is empty: $Directory" }
     try { return [Convert]::FromBase64String($text) }
-    catch { throw "Invalid base64 brand source: $Path" }
+    catch { throw "Invalid base64 brand source chunks: $Directory" }
 }
 
 function Write-Bytes {
@@ -62,7 +64,6 @@ function Convert-ToGreenVariant {
             $p=$Source.GetPixel($x,$y)
             if($p.A -eq 0){$result.SetPixel($x,$y,$p);continue}
             $hsv=Convert-RgbToHsv $p.R $p.G $p.B
-            # Preserve white/gray details. Re-hue only visibly chromatic pixels.
             if($hsv[1] -ge 0.12 -and $hsv[2] -ge 0.10) {
                 $s=[Math]::Min(1.0,[Math]::Max(0.58,$hsv[1]))
                 $result.SetPixel($x,$y,(Convert-HsvToColor 133.0 $s $hsv[2] $p.A))
@@ -123,11 +124,11 @@ function Write-MultiSizeIco {
 }
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-$shieldBytes=Resolve-SourceBase64 '.\tools\branding\source\g-shield.png.b64'
+$shieldBytes=Resolve-SourceBase64Parts '.\tools\branding\source\g-shield'
+if($shieldBytes.Length -ne 19842){ throw "Corporate shield size mismatch: $($shieldBytes.Length) bytes" }
 $shieldPath=Join-Path $OutputDirectory 'g-shield.png'
 Write-Bytes $shieldBytes $shieldPath
 
-# The in-app shield stays byte-identical to G-switcher. Only the executable icon is re-hued.
 $sourceStream=[IO.MemoryStream]::new($shieldBytes,$false)
 try {
     $sourceImage=[Drawing.Image]::FromStream($sourceStream,$true,$true)
@@ -143,7 +144,6 @@ try {
     } finally { $sourceImage.Dispose() }
 } finally { $sourceStream.Dispose() }
 
-# Provenance gate: this is the exact source file from bajoicheg/g-switcher assets/g-shield.png.
 $shieldHash=(Get-FileHash -LiteralPath $shieldPath -Algorithm SHA256).Hash.ToLowerInvariant()
 if($shieldHash -ne '5157c5cf83a6cfddb74c51701a693e401e36b400812505a1e46e15d760c72877') {
     throw "Corporate shield SHA-256 mismatch: $shieldHash"
