@@ -29,7 +29,7 @@ internal static class SelfTest
         var restart = result.Actions.Single(x => x.Id == "ManualRestart");
         var dism = result.Actions.Single(x => x.Id == "Dism");
         var sfc = result.Actions.Single(x => x.Id == "Sfc");
-        if (!clean.CanAutomate || !clean.RequiresAdmin || !clean.Preselected) return 1;
+        if (!clean.CanAutomate || !clean.RequiresAdmin || !clean.Preselected || clean.Kind != "Рекомендуется") return 1;
         if (restart.CanAutomate) return 2;
         if (dism.Preselected || sfc.Preselected) return 3;
         if (result.Assessment.Score >= 100) return 4;
@@ -44,6 +44,10 @@ internal static class SelfTest
         if (result.Assessment.Status != "OK") return 3;
         if (result.Assessment.Score != 100) return 4;
         if (result.Assessment.MissingSignals.Count != 0) return 5;
+
+        var clean = result.Actions.SingleOrDefault(x => x.Id == "CleanTemp");
+        if (clean is null || !clean.CanAutomate || !clean.RequiresAdmin) return 6;
+        if (clean.Preselected || clean.Kind != "Дополнительно") return 7;
         return 0;
     }
 
