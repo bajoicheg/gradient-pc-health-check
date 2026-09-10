@@ -1,0 +1,13 @@
+# Default owner
+* @bajoicheg
+
+# Security-sensitive code and release pipeline
+/.github/workflows/ @bajoicheg
+/src/Gradient.PcHealthCheck/RemediationWorker.cs @bajoicheg
+/src/Gradient.PcHealthCheck/DiagnosticsService.cs @bajoicheg
+/tools/e2e/ @bajoicheg
+/tools/ci/ @bajoicheg
+/SECURITY.md @bajoicheg
+/docs/SECURITY.md @bajoicheg
+/NOTICE @bajoicheg
+/LICENSE @bajoicheg
