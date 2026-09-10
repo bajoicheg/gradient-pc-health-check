@@ -28,6 +28,20 @@ function Write-Bytes {
     }
 }
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $stream = [IO.File]::OpenRead((Resolve-Path -LiteralPath $Path).Path)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $sha.ComputeHash($stream)
+        return ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Convert-RgbToHsv {
     param([int]$R,[int]$G,[int]$B)
     $r1=$R/255.0; $g1=$G/255.0; $b1=$B/255.0
@@ -144,7 +158,7 @@ try {
     } finally { $sourceImage.Dispose() }
 } finally { $sourceStream.Dispose() }
 
-$shieldHash=(Get-FileHash -LiteralPath $shieldPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$shieldHash=Get-Sha256Hex -Path $shieldPath
 if($shieldHash -ne '5157c5cf83a6cfddb74c51701a693e401e36b400812505a1e46e15d760c72877') {
     throw "Corporate shield SHA-256 mismatch: $shieldHash"
 }
