@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: 'Successful Windows EXE push run on main to publish'
+        description: 'Successful Windows EXE push run on current main HEAD to publish'
         required: true
         type: string
 
@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -42,14 +43,16 @@ jobs:
           EVENT=$(jq -r '.event' <<<"$RUN_JSON")
           BRANCH=$(jq -r '.head_branch' <<<"$RUN_JSON")
           HEAD_SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
+          MAIN_SHA=$(gh api "repos/$REPO/branches/main" --jq '.commit.sha')
 
           [[ "$NAME" == "Windows EXE" ]] || { echo "Unexpected workflow: $NAME" >&2; exit 1; }
           [[ "$STATUS" == "completed" && "$CONCLUSION" == "success" ]] || { echo "Run is not successful: $STATUS/$CONCLUSION" >&2; exit 1; }
           [[ "$EVENT" == "push" && "$BRANCH" == "main" ]] || { echo "Run must be a push build on main, got event=$EVENT branch=$BRANCH" >&2; exit 1; }
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid head SHA: $HEAD_SHA" >&2; exit 1; }
+          [[ "$HEAD_SHA" == "$MAIN_SHA" ]] || { echo "Run SHA $HEAD_SHA is not current main HEAD $MAIN_SHA" >&2; exit 1; }
 
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "Validated Windows EXE run $RUN_ID at $HEAD_SHA"
+          echo "Validated Windows EXE run $RUN_ID at current main HEAD $HEAD_SHA"
 
       - name: Checkout exact tested commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
