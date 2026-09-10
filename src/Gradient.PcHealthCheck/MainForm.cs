@@ -10,6 +10,7 @@ public sealed class MainForm : Form
     private readonly ReportService _reports = new();
     private ScanResult? _current;
     private string? _latestReport;
+    private bool _isBusy;
 
     private readonly Label _score = new();
     private readonly Label _state = new();
@@ -55,6 +56,7 @@ public sealed class MainForm : Form
         Font = new Font("Segoe UI", 9F);
         try { Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? Application.ExecutablePath); } catch { }
         BuildUi();
+        UpdateApplyState();
         Shown += async (_, _) => await ScanAsync();
     }
 
@@ -124,7 +126,15 @@ public sealed class MainForm : Form
         _actions.Columns.Add(new DataGridViewTextBoxColumn { Name = "Risk", HeaderText = "Риск", Width = 75, ReadOnly = true });
         _actions.Columns.Add(new DataGridViewTextBoxColumn { Name = "Verify", HeaderText = "Автопроверка", Width = 270, ReadOnly = true });
         foreach (DataGridViewColumn c in _actions.Columns) c.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-        _actions.CellContentClick += (_, e) => { if (e.RowIndex >= 0 && e.ColumnIndex == 0) _actions.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+        _actions.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_actions.IsCurrentCellDirty && _actions.CurrentCell is DataGridViewCheckBoxCell)
+                _actions.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        };
+        _actions.CellValueChanged += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex == _actions.Columns["Selected"].Index) UpdateApplyState();
+        };
         split.Panel1.Controls.Add(_actions);
 
         ConfigureGrid(_findings);
@@ -153,9 +163,15 @@ public sealed class MainForm : Form
 
     private TabPage EventsTab()
     {
-        var page = Page("События Windows"); ConfigureGrid(_events);
-        _events.Columns.Add("Log", "Журнал"); _events.Columns.Add("Provider", "Provider"); _events.Columns.Add("Id", "Event ID"); _events.Columns.Add("Count", "Количество"); _events.Columns.Add("Last", "Последнее");
-        _events.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; page.Controls.Add(_events); return page;
+        var page = Page("События Windows");
+        ConfigureGrid(_events);
+        _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Log", HeaderText = "Журнал", ValueType = typeof(string) });
+        _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Provider", HeaderText = "Provider", ValueType = typeof(string), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+        _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Id", HeaderText = "Event ID", ValueType = typeof(int), SortMode = DataGridViewColumnSortMode.Automatic });
+        _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Count", HeaderText = "Количество", ValueType = typeof(int), SortMode = DataGridViewColumnSortMode.Automatic });
+        _events.Columns.Add(new DataGridViewTextBoxColumn { Name = "Last", HeaderText = "Последнее", ValueType = typeof(DateTime), SortMode = DataGridViewColumnSortMode.Automatic, DefaultCellStyle = new DataGridViewCellStyle { Format = "dd.MM HH:mm:ss" } });
+        page.Controls.Add(_events);
+        return page;
     }
 
     private TabPage SystemTab()
@@ -177,9 +193,9 @@ public sealed class MainForm : Form
     {
         var p = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 8, 0, 0) };
         SetupButton(_scan, "Повторить диагностику", 0, false); _scan.Width = 175; _scan.Click += async (_, _) => await ScanAsync(); p.Controls.Add(_scan);
-        SetupButton(_apply, "Применить выбранное", 185, true); _apply.Width = 190; _apply.Click += async (_, _) => await ApplyAsync(); p.Controls.Add(_apply);
-        SetupButton(_openReport, "Открыть отчёт", 385, false); _openReport.Width = 125; _openReport.Click += (_, _) => OpenReport(); p.Controls.Add(_openReport);
-        SetupButton(_openFolder, "Папка отчётов", 520, false); _openFolder.Width = 125; _openFolder.Click += (_, _) => OpenFolder(); p.Controls.Add(_openFolder);
+        SetupButton(_apply, "Применить выбранное", 185, true); _apply.Width = 205; _apply.Click += async (_, _) => await ApplyAsync(); p.Controls.Add(_apply);
+        SetupButton(_openReport, "Открыть отчёт", 400, false); _openReport.Width = 125; _openReport.Click += (_, _) => OpenReport(); p.Controls.Add(_openReport);
+        SetupButton(_openFolder, "Папка отчётов", 535, false); _openFolder.Width = 125; _openFolder.Click += (_, _) => OpenFolder(); p.Controls.Add(_openFolder);
         _progress.Style = ProgressBarStyle.Marquee; _progress.MarqueeAnimationSpeed = 25; _progress.Visible = false; _progress.Anchor = AnchorStyles.Top | AnchorStyles.Right; _progress.Size = new Size(180, 12); p.Controls.Add(_progress);
         _status.AutoSize = true; _status.ForeColor = Muted; _status.Anchor = AnchorStyles.Top | AnchorStyles.Right; p.Controls.Add(_status);
         p.Resize += (_, _) => { _progress.Location = new Point(Math.Max(700, p.ClientSize.Width - 190), 9); _status.Location = new Point(Math.Max(650, p.ClientSize.Width - _status.Width - 10), 27); };
@@ -207,17 +223,13 @@ public sealed class MainForm : Form
     {
         if (_current is null) return;
         _actions.EndEdit();
-        var selected = new List<ActionRecommendation>();
-        foreach (DataGridViewRow row in _actions.Rows)
-        {
-            if (row.Tag is not ActionRecommendation a || !a.CanAutomate) continue;
-            if (Convert.ToBoolean(row.Cells[0].Value ?? false)) selected.Add(a);
-        }
+        var selected = SelectedAutomatableActions();
         if (selected.Count == 0)
         {
-            MessageBox.Show(this, "Отметьте хотя бы одно автоматизируемое действие.", "Gradient PC Health Check", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            UpdateApplyState();
             return;
         }
+
         var summary = string.Join(Environment.NewLine, selected.Select(a => "• " + a.Title + (a.RequiresAdmin ? " [Admin]" : "")));
         if (MessageBox.Show(this, "Будут выполнены выбранные действия:\n\n" + summary + "\n\nПосле выполнения программа автоматически повторит диагностику.", "Подтвердите действия", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
 
@@ -245,6 +257,25 @@ public sealed class MainForm : Form
         finally { Busy(false); }
     }
 
+    private List<ActionRecommendation> SelectedAutomatableActions()
+    {
+        var selected = new List<ActionRecommendation>();
+        foreach (DataGridViewRow row in _actions.Rows)
+        {
+            if (row.Tag is not ActionRecommendation action || !action.CanAutomate) continue;
+            if (Convert.ToBoolean(row.Cells["Selected"].Value ?? false)) selected.Add(action);
+        }
+        return selected;
+    }
+
+    private void UpdateApplyState()
+    {
+        var count = SelectedAutomatableActions().Count;
+        _apply.Text = count > 0 ? $"Применить выбранное ({count})" : "Применить выбранное";
+        _apply.Enabled = !_isBusy && count > 0;
+        _apply.Cursor = _apply.Enabled ? Cursors.Hand : Cursors.Default;
+    }
+
     private void Populate(ScanResult scan)
     {
         var d = scan.Data;
@@ -260,8 +291,20 @@ public sealed class MainForm : Form
         {
             var i = _actions.Rows.Add(a.Preselected, a.Kind, a.Title, a.Reason, a.RequiresAdmin ? "Да" : "Нет", a.Risk, a.Verification);
             var row = _actions.Rows[i]; row.Tag = a;
-            if (!a.CanAutomate) { row.Cells[0].ReadOnly = true; row.Cells[0].Style.BackColor = Color.FromArgb(240, 243, 246); row.Cells[0].Value = false; }
+            if (!a.CanAutomate)
+            {
+                row.Cells[0].ReadOnly = true;
+                row.Cells[0].Style.BackColor = Color.FromArgb(240, 243, 246);
+                row.Cells[0].Value = false;
+                row.DefaultCellStyle.ForeColor = Color.FromArgb(85, 98, 110);
+            }
+            else if (a.Kind == "Рекомендуется")
+            {
+                row.DefaultCellStyle.BackColor = Color.FromArgb(240, 249, 244);
+            }
         }
+        UpdateApplyState();
+
         _findings.Rows.Clear();
         foreach (var f in scan.Assessment.Findings.OrderBy(x => x.Severity == "CRIT" ? 0 : x.Severity == "WARN" ? 1 : 2))
         {
@@ -269,8 +312,10 @@ public sealed class MainForm : Form
             _findings.Rows[i].Cells[0].Style.ForeColor = f.Severity == "CRIT" ? Crit : f.Severity == "WARN" ? Warn : Ok;
             _findings.Rows[i].Cells[0].Style.Font = new Font(Font, FontStyle.Bold);
         }
+
         FillProcesses(_topCpu, d.TopCpu); FillProcesses(_topRam, d.TopMemory); FillProcesses(_topIo, d.TopIo);
-        _events.Rows.Clear(); foreach (var e in d.Events.Top) _events.Rows.Add(e.Log, e.Provider, e.EventId, e.Count, e.LastSeen?.ToString("dd.MM HH:mm:ss") ?? "");
+        _events.Rows.Clear();
+        foreach (var e in d.Events.Top) _events.Rows.Add(e.Log, e.Provider, e.EventId, e.Count, e.LastSeen ?? DateTime.MinValue);
         PopulateSystem(d);
     }
 
@@ -305,17 +350,33 @@ public sealed class MainForm : Form
 
     private void Busy(bool value, string? text = null)
     {
-        _scan.Enabled = !value; _apply.Enabled = !value; _openReport.Enabled = !value; _progress.Visible = value; if (text is not null) _status.Text = text; Cursor = value ? Cursors.WaitCursor : Cursors.Default;
+        _isBusy = value;
+        _scan.Enabled = !value;
+        _openReport.Enabled = !value;
+        _openFolder.Enabled = !value;
+        _progress.Visible = value;
+        if (text is not null) _status.Text = text;
+        Cursor = value ? Cursors.WaitCursor : Cursors.Default;
+        UpdateApplyState();
     }
 
     private static void FillProcesses(DataGridView g, IEnumerable<ProcessInfo> items)
     {
-        g.Rows.Clear(); foreach (var p in items) g.Rows.Add(p.Name, p.Pid, $"{p.CpuPercent:0.#}%", $"{p.MemoryMB:0.#} MB", $"{p.IoMBPerSec:0.##} MB/s");
+        g.Rows.Clear();
+        foreach (var p in items) g.Rows.Add(p.Name, p.Pid, p.CpuPercent, p.MemoryMB, p.IoMBPerSec);
     }
 
     private static TabPage ProcessPage(string title, DataGridView grid)
     {
-        var p = Page(title); ConfigureGrid(grid); grid.Columns.Add("Process", "Процесс"); grid.Columns.Add("Pid", "PID"); grid.Columns.Add("Cpu", "CPU"); grid.Columns.Add("Ram", "RAM"); grid.Columns.Add("Io", "I/O"); grid.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; p.Controls.Add(grid); return p;
+        var p = Page(title);
+        ConfigureGrid(grid);
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Process", HeaderText = "Процесс", ValueType = typeof(string), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Pid", HeaderText = "PID", ValueType = typeof(int), Width = 80, SortMode = DataGridViewColumnSortMode.Automatic });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Cpu", HeaderText = "CPU", ValueType = typeof(double), Width = 90, SortMode = DataGridViewColumnSortMode.Automatic, DefaultCellStyle = new DataGridViewCellStyle { Format = "0.#'%'", Alignment = DataGridViewContentAlignment.MiddleRight } });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Ram", HeaderText = "RAM", ValueType = typeof(double), Width = 110, SortMode = DataGridViewColumnSortMode.Automatic, DefaultCellStyle = new DataGridViewCellStyle { Format = "0.# 'MB'", Alignment = DataGridViewContentAlignment.MiddleRight } });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Io", HeaderText = "I/O", ValueType = typeof(double), Width = 110, SortMode = DataGridViewColumnSortMode.Automatic, DefaultCellStyle = new DataGridViewCellStyle { Format = "0.## 'MB/s'", Alignment = DataGridViewContentAlignment.MiddleRight } });
+        p.Controls.Add(grid);
+        return p;
     }
 
     private static TabPage Page(string text) => new(text) { BackColor = Color.White, Padding = new Padding(8) };
@@ -354,14 +415,19 @@ public sealed class MainForm : Form
     {
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e); var g = e.Graphics; g.SmoothingMode = SmoothingMode.AntiAlias; var w = ClientSize.Width; var h = ClientSize.Height;
+            base.OnPaint(e);
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var w = ClientSize.Width;
+            var h = ClientSize.Height;
             var outer = new PointF[] { new(w*.5f,h*.03f),new(w*.94f,h*.18f),new(w*.90f,h*.58f),new(w*.76f,h*.78f),new(w*.5f,h*.97f),new(w*.24f,h*.78f),new(w*.10f,h*.58f),new(w*.06f,h*.18f) };
             using var ob = new SolidBrush(Navy); g.FillPolygon(ob, outer);
             var inner = new PointF[] { new(w*.5f,h*.10f),new(w*.86f,h*.22f),new(w*.83f,h*.55f),new(w*.70f,h*.72f),new(w*.5f,h*.87f),new(w*.30f,h*.72f),new(w*.17f,h*.55f),new(w*.14f,h*.22f) };
             using var ib = new SolidBrush(Blue); g.FillPolygon(ib, inner);
-            using var f = new Font("Segoe UI", Math.Max(12, w*.48f), FontStyle.Bold, GraphicsUnit.Pixel); using var wb = new SolidBrush(Color.White); var sz = g.MeasureString("G", f); g.DrawString("G", f, wb, (w-sz.Width)/2, h*.24f);
-            using var pen = new Pen(Color.FromArgb(180,234,255), Math.Max(2,w*.04f)) { LineJoin = LineJoin.Round };
-            g.DrawLines(pen, new PointF[] { new(w*.26f,h*.70f),new(w*.39f,h*.70f),new(w*.45f,h*.62f),new(w*.51f,h*.80f),new(w*.59f,h*.66f),new(w*.65f,h*.70f),new(w*.76f,h*.70f) });
+            using var f = new Font("Segoe UI", Math.Max(12, w*.48f), FontStyle.Bold, GraphicsUnit.Pixel);
+            using var wb = new SolidBrush(Color.White);
+            var sz = g.MeasureString("G", f);
+            g.DrawString("G", f, wb, (w-sz.Width)/2, h*.24f);
         }
     }
 }
