@@ -103,16 +103,23 @@ public sealed class AssessmentService
         }
 
         var systemDrive = SystemDrive(data);
-        if (systemDrive is not null && (systemDrive.FreePercent <= Thresholds.SystemDiskWarnFreePercent || systemDrive.FreeGB <= Thresholds.SystemDiskWarnFreeGB))
+        var tempCleanupRecommended = systemDrive is not null &&
+            (systemDrive.FreePercent <= Thresholds.SystemDiskWarnFreePercent || systemDrive.FreeGB <= Thresholds.SystemDiskWarnFreeGB);
+
+        Add(new ActionRecommendation
         {
-            Add(new ActionRecommendation
-            {
-                Id = "CleanTemp", Kind = "Рекомендуется", Title = "Очистить старые временные файлы",
-                Reason = $"На системном диске свободно {systemDrive.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%). Удаляются только Temp-файлы старше {Thresholds.TempOlderThanDays} дней; Prefetch не затрагивается.",
-                CanAutomate = true, RequiresAdmin = true, Preselected = true, Risk = "Низкий",
-                Verification = "Повторно измерить свободное место и зафиксировать освобождённый объём."
-            });
-        }
+            Id = "CleanTemp",
+            Kind = tempCleanupRecommended ? "Рекомендуется" : "Дополнительно",
+            Title = "Очистить старые временные файлы",
+            Reason = tempCleanupRecommended
+                ? $"На системном диске свободно {systemDrive!.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%). Удаляются только Temp-файлы старше {Thresholds.TempOlderThanDays} дней; Prefetch не затрагивается."
+                : $"Свободного места достаточно, поэтому очистка не рекомендуется автоматически. Инженер может выполнить её вручную: удаляются только Temp-файлы старше {Thresholds.TempOlderThanDays} дней; Prefetch не затрагивается.",
+            CanAutomate = true,
+            RequiresAdmin = true,
+            Preselected = tempCleanupRecommended,
+            Risk = "Низкий",
+            Verification = "Зафиксировать количество удалённых файлов/освобождённый объём и повторно измерить свободное место."
+        });
 
         if (data.PendingReboot.Pending || data.System.UptimeDays >= Thresholds.UptimeWarnDays)
         {
