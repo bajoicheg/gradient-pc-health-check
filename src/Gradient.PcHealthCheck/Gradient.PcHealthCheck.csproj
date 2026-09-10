@@ -8,9 +8,9 @@
     <AssemblyName>Gradient-PC-Health-Check</AssemblyName>
     <RootNamespace>Gradient.PcHealthCheck</RootNamespace>
     <ApplicationIcon>assets\gpchc.ico</ApplicationIcon>
-    <Version>0.3.4</Version>
-    <FileVersion>0.3.4.0</FileVersion>
-    <AssemblyVersion>0.3.4.0</AssemblyVersion>
+    <Version>0.3.5</Version>
+    <FileVersion>0.3.5.0</FileVersion>
+    <AssemblyVersion>0.3.5.0</AssemblyVersion>
     <Product>Gradient PC Health Check</Product>
     <Company>Gradient</Company>
     <Description>Service Desk workstation diagnostics and controlled remediation for Windows 11.</Description>
