@@ -2,7 +2,8 @@ name: Finalize 0.3.5 branding
 
 on:
   push:
-    branches: [ release/0.3.5 ]
+    branches:
+      - release/0.3.5
   workflow_dispatch:
 
 permissions:
@@ -31,21 +32,19 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $path = 'src/Gradient.PcHealthCheck/MainForm.cs'
           $text = [IO.File]::ReadAllText($path)
-          $old = @'
-        var logo = new ShieldLogo { Location = new Point(13, 8), Size = new Size(58, 64), BackColor = Color.White };
-        p.Controls.Add(logo);
-'@
-          $new = @'
-        var logo = new PictureBox
-        {
-            Location = new Point(13, 8),
-            Size = new Size(58, 64),
-            BackColor = Color.White,
-            SizeMode = PictureBoxSizeMode.Zoom,
-            Image = BrandAssets.LoadShield()
-        };
-        p.Controls.Add(logo);
-'@
+          $old = "        var logo = new ShieldLogo { Location = new Point(13, 8), Size = new Size(58, 64), BackColor = Color.White };`n        p.Controls.Add(logo);"
+          $newLines = @(
+            '        var logo = new PictureBox',
+            '        {',
+            '            Location = new Point(13, 8),',
+            '            Size = new Size(58, 64),',
+            '            BackColor = Color.White,',
+            '            SizeMode = PictureBoxSizeMode.Zoom,',
+            '            Image = BrandAssets.LoadShield()',
+            '        };',
+            '        p.Controls.Add(logo);'
+          )
+          $new = $newLines -join "`n"
           if ($text.Contains($old)) {
             $text = $text.Replace($old, $new)
             [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
@@ -60,11 +59,13 @@ jobs:
           $shield = 'src/Gradient.PcHealthCheck/assets/g-shield.png'
           $icon = 'src/Gradient.PcHealthCheck/assets/gpchc.ico'
           $preview = 'src/Gradient.PcHealthCheck/assets/gpchc-icon-green.png'
-          if ((Get-FileHash $shield -Algorithm SHA256).Hash.ToLowerInvariant() -ne '5157c5cf83a6cfddb74c51701a693e401e36b400812505a1e46e15d760c72877') {
-            throw 'Corporate shield provenance check failed.'
-          }
-          foreach ($file in @($icon,$preview)) {
-            if (-not (Test-Path $file -PathType Leaf) -or (Get-Item $file).Length -lt 4096) { throw "Generated brand asset invalid: $file" }
+          $expected = '5157c5cf83a6cfddb74c51701a693e401e36b400812505a1e46e15d760c72877'
+          $actual = (Get-FileHash $shield -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Corporate shield provenance check failed: $actual" }
+          foreach ($file in @($icon, $preview)) {
+            if (-not (Test-Path $file -PathType Leaf) -or (Get-Item $file).Length -lt 4096) {
+              throw "Generated brand asset invalid: $file"
+            }
           }
           if (-not (Select-String -LiteralPath src/Gradient.PcHealthCheck/MainForm.cs -SimpleMatch 'Image = BrandAssets.LoadShield()')) {
             throw 'MainForm does not use the embedded corporate shield.'
@@ -73,6 +74,7 @@ jobs:
       - name: Commit finalized assets
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add src/Gradient.PcHealthCheck/MainForm.cs src/Gradient.PcHealthCheck/assets/g-shield.png src/Gradient.PcHealthCheck/assets/gpchc.ico src/Gradient.PcHealthCheck/assets/gpchc-icon-green.png
@@ -82,4 +84,6 @@ jobs:
             exit 0
           }
           git commit -m 'Finalize exact G-switcher shield and green application icon'
+          if ($LASTEXITCODE -ne 0) { throw 'Branding commit failed.' }
           git push origin HEAD:release/0.3.5
+          if ($LASTEXITCODE -ne 0) { throw 'Branding push failed.' }
