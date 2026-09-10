@@ -107,4 +107,4 @@ if ($junctionEnabled) {
 }
 Write-Host "Manifest:  $manifestPath"
 Write-Host ''
-Write-Host 'Next: run Gradient-PC-Health-Check.exe as a normal user, select CleanTemp, complete UAC, then run Verify-CleanTempScenario.ps1.'
+Write-Host 'Next: run Gradient-PC-Health-Check.exe as a normal user, select CleanTemp, confirm the action (no UAC), then run Verify-CleanTempScenario.ps1.'
