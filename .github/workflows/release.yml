@@ -1,0 +1,136 @@
+name: Publish GitHub Release
+
+on:
+  workflow_run:
+    workflows: ["Windows EXE"]
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: pc-health-check-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Validate tested build run
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_JSON=$(gh api "repos/$REPO/actions/runs/$RUN_ID")
+          NAME=$(jq -r '.name' <<<"$RUN_JSON")
+          STATUS=$(jq -r '.status' <<<"$RUN_JSON")
+          CONCLUSION=$(jq -r '.conclusion' <<<"$RUN_JSON")
+          EVENT=$(jq -r '.event' <<<"$RUN_JSON")
+          BRANCH=$(jq -r '.head_branch' <<<"$RUN_JSON")
+          HEAD_SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
+
+          [[ "$NAME" == "Windows EXE" ]] || { echo "Unexpected workflow: $NAME" >&2; exit 1; }
+          [[ "$STATUS" == "completed" && "$CONCLUSION" == "success" ]] || { echo "Run is not successful: $STATUS/$CONCLUSION" >&2; exit 1; }
+          [[ "$EVENT" == "push" && "$BRANCH" == "main" ]] || { echo "Run must be a push build on main, got event=$EVENT branch=$BRANCH" >&2; exit 1; }
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid head SHA: $HEAD_SHA" >&2; exit 1; }
+
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "Validated Windows EXE run $RUN_ID at $HEAD_SHA"
+
+      - name: Checkout exact tested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.source.outputs.head_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content src/G.PcHealthCheck/G.PcHealthCheck.csproj -Raw
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected release version: $version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+
+      - name: Skip if this version is already released
+        id: exists
+        shell: bash
+        run: |
+          if gh release view "${{ steps.version.outputs.tag }}" --repo "$REPO" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release ${{ steps.version.outputs.tag }} already exists; no assets will be replaced."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download tested artifacts
+        if: steps.exists.outputs.exists == 'false'
+        shell: bash
+        run: |
+          mkdir -p release-assets/final release-assets/pilot
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-windows-x64 --dir release-assets/final
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-pilot-e2e --dir release-assets/pilot
+
+      - name: Verify release inputs
+        if: steps.exists.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $exe = Get-Item release-assets/final/G-PC-Health-Check.exe -ErrorAction Stop
+          $checksum = Get-Item release-assets/final/G-PC-Health-Check.exe.sha256 -ErrorAction Stop
+          $pilot = Get-ChildItem release-assets/pilot -Filter 'G-PC-Health-Check-*-pilot.zip' -File | Select-Object -First 1
+          if ($null -eq $pilot) { throw 'Pilot E2E ZIP not found.' }
+
+          $line = (Get-Content $checksum.FullName -Raw -Encoding ASCII).Trim()
+          if ($line -notmatch '^(?<hash>[0-9a-fA-F]{64})\s+\*?G-PC-Health-Check\.exe$') {
+            throw 'Malformed checksum file.'
+          }
+          $actual = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $Matches['hash'].ToLowerInvariant()) { throw 'EXE checksum mismatch before release.' }
+
+          # Exact Windows FileVersion is already a mandatory gate in the successful triggering
+          # Windows EXE workflow. The Linux release runner does not reliably expose PE version
+          # resources through FileVersionInfo, so do not duplicate that platform-specific check here.
+          Write-Host "Release input verified. SHA-256: $actual"
+
+      - name: Publish GitHub Release
+        if: steps.exists.outputs.exists == 'false'
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.source.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          PILOT_ZIP=$(find release-assets/pilot -maxdepth 1 -type f -name 'G-PC-Health-Check-*-pilot.zip' -print -quit)
+          test -n "$PILOT_ZIP"
+          cat > release-notes.md <<'EOF'
+          G PC Health Check — Windows 11 Service Desk diagnostics and controlled remediation.
+
+          Downloads:
+          - `G-PC-Health-Check.exe` — single-file self-contained Windows x64 application;
+          - `G-PC-Health-Check.exe.sha256` — checksum for the EXE;
+          - `*-pilot.zip` — optional E2E kit and documentation for pilot verification.
+
+          Administrative remediation (DISM/SFC) is allowed only from the canonical protected path:
+          `C:\Program Files\G\PCHealthCheck\G-PC-Health-Check.exe`.
+          User Temp cleanup runs without elevation in the interactive user's context.
+          EOF
+
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --repo "$REPO" \
+            --target "$HEAD_SHA" \
+            --title "G PC Health Check ${{ steps.version.outputs.version }}" \
+            --notes-file release-notes.md \
+            release-assets/final/G-PC-Health-Check.exe \
+            release-assets/final/G-PC-Health-Check.exe.sha256 \
+            "$PILOT_ZIP"

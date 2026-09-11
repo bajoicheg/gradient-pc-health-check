@@ -1,0 +1,182 @@
+name: Supply Chain Attestations
+
+on:
+  workflow_run:
+    workflows: ["Windows EXE"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: pc-health-check-supply-chain-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+env:
+  SBOM_TOOL_VERSION: '4.1.5'
+  SBOM_TOOL_LINUX_X64_SHA256: 'bf5d4f99bc98c119d549d08fc02ae92598a7a42772f17317c01031a92632e05b'
+
+jobs:
+  attest:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+    steps:
+      - name: Validate tested build run
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_JSON=$(gh api "repos/$REPO/actions/runs/$RUN_ID")
+          NAME=$(jq -r '.name' <<<"$RUN_JSON")
+          STATUS=$(jq -r '.status' <<<"$RUN_JSON")
+          CONCLUSION=$(jq -r '.conclusion' <<<"$RUN_JSON")
+          EVENT=$(jq -r '.event' <<<"$RUN_JSON")
+          BRANCH=$(jq -r '.head_branch' <<<"$RUN_JSON")
+          HEAD_SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
+
+          [[ "$NAME" == "Windows EXE" ]] || { echo "Unexpected workflow: $NAME" >&2; exit 1; }
+          [[ "$STATUS" == "completed" && "$CONCLUSION" == "success" ]] || { echo "Run is not successful: $STATUS/$CONCLUSION" >&2; exit 1; }
+          [[ "$EVENT" == "push" && "$BRANCH" == "main" ]] || { echo "Run must be a push build on main, got event=$EVENT branch=$BRANCH" >&2; exit 1; }
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid head SHA: $HEAD_SHA" >&2; exit 1; }
+
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "Validated Windows EXE run $RUN_ID at $HEAD_SHA"
+
+      - name: Checkout exact tested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.source.outputs.head_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.425'
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content src/G.PcHealthCheck/G.PcHealthCheck.csproj -Raw
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected version: $version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Download exact build artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/final artifacts/pilot
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-windows-x64 --dir artifacts/final
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-pilot-e2e --dir artifacts/pilot
+
+      - name: Verify downloaded subjects
+        id: subjects
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE=artifacts/final/G-PC-Health-Check.exe
+          CHECKSUM=artifacts/final/G-PC-Health-Check.exe.sha256
+          PILOT=$(find artifacts/pilot -maxdepth 1 -type f -name 'G-PC-Health-Check-*-pilot.zip' -print -quit)
+          test -s "$EXE"
+          test -s "$CHECKSUM"
+          test -n "$PILOT" && test -s "$PILOT"
+
+          EXPECTED=$(awk '{print tolower($1)}' "$CHECKSUM")
+          ACTUAL=$(sha256sum "$EXE" | awk '{print tolower($1)}')
+          [[ "$EXPECTED" =~ ^[0-9a-f]{64}$ ]] || { echo "Malformed EXE checksum" >&2; exit 1; }
+          [[ "$ACTUAL" == "$EXPECTED" ]] || { echo "EXE checksum mismatch" >&2; exit 1; }
+
+          echo "exe_path=$EXE" >> "$GITHUB_OUTPUT"
+          echo "pilot_path=$PILOT" >> "$GITHUB_OUTPUT"
+          echo "Verified EXE SHA-256: $ACTUAL"
+
+      - name: Restore dependency metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The source project targets Windows. On the Linux attestation runner we restore
+          # only dependency metadata for component detection; no application build occurs here.
+          dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj -p:EnableWindowsTargeting=true
+          test -s src/G.PcHealthCheck/obj/project.assets.json
+
+      - name: Download and verify pinned Microsoft SBOM Tool
+        id: sbomtool
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOL="$RUNNER_TEMP/sbom-tool-linux-x64"
+          URL="https://github.com/microsoft/sbom-tool/releases/download/v${SBOM_TOOL_VERSION}/sbom-tool-linux-x64"
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error "$URL" -o "$TOOL"
+          echo "${SBOM_TOOL_LINUX_X64_SHA256}  $TOOL" | sha256sum --check --strict
+          chmod 0755 "$TOOL"
+          echo "path=$TOOL" >> "$GITHUB_OUTPUT"
+
+      - name: Generate and validate SPDX SBOM
+        id: sbom
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SBOM_TOOL: ${{ steps.sbomtool.outputs.path }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/sbom
+          "$SBOM_TOOL" generate \
+            -b "$GITHUB_WORKSPACE/artifacts/final" \
+            -bc "$GITHUB_WORKSPACE" \
+            -m "$GITHUB_WORKSPACE/artifacts/sbom" \
+            -pn "G PC Health Check" \
+            -pv "$VERSION" \
+            -ps "Organization: G" \
+            -nsb "https://github.com/$REPO" \
+            -mi SPDX:2.2
+
+          GENERATED=$(find artifacts/sbom -type f -name 'manifest.spdx.json' -print -quit)
+          test -n "$GENERATED" && test -s "$GENERATED"
+          FINAL="artifacts/sbom/G-PC-Health-Check-$VERSION.spdx.json"
+          cp "$GENERATED" "$FINAL"
+
+          jq -e '.spdxVersion == "SPDX-2.2"' "$FINAL" >/dev/null
+          jq -e '.packages | length > 0' "$FINAL" >/dev/null
+          jq -e '.files | length > 0' "$FINAL" >/dev/null
+          sha256sum "$FINAL" > "$FINAL.sha256"
+          echo "sbom_path=$FINAL" >> "$GITHUB_OUTPUT"
+          echo "SBOM: $FINAL"
+
+      - name: Attest EXE build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ steps.subjects.outputs.exe_path }}
+
+      - name: Attest pilot bundle build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: ${{ steps.subjects.outputs.pilot_path }}
+
+      - name: Attest EXE SBOM
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+        with:
+          subject-path: ${{ steps.subjects.outputs.exe_path }}
+          sbom-path: ${{ steps.sbom.outputs.sbom_path }}
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: g-pc-health-check-sbom
+          path: |
+            ${{ steps.sbom.outputs.sbom_path }}
+            ${{ steps.sbom.outputs.sbom_path }}.sha256
+          if-no-files-found: error
+          retention-days: 90

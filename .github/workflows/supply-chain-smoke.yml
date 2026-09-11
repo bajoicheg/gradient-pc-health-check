@@ -1,0 +1,88 @@
+name: Supply Chain Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supply-chain-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SBOM_TOOL_VERSION: '4.1.5'
+  SBOM_TOOL_LINUX_X64_SHA256: 'bf5d4f99bc98c119d549d08fc02ae92598a7a42772f17317c01031a92632e05b'
+
+jobs:
+  supply-chain-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.425'
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content src/G.PcHealthCheck/G.PcHealthCheck.csproj -Raw
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected version: $version" }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore Windows-targeting dependency metadata on Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj -p:EnableWindowsTargeting=true
+          test -s src/G.PcHealthCheck/obj/project.assets.json
+
+      - name: Download and verify pinned Microsoft SBOM Tool
+        id: sbomtool
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOL="$RUNNER_TEMP/sbom-tool-linux-x64"
+          URL="https://github.com/microsoft/sbom-tool/releases/download/v${SBOM_TOOL_VERSION}/sbom-tool-linux-x64"
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error "$URL" -o "$TOOL"
+          echo "${SBOM_TOOL_LINUX_X64_SHA256}  $TOOL" | sha256sum --check --strict
+          chmod 0755 "$TOOL"
+          echo "path=$TOOL" >> "$GITHUB_OUTPUT"
+
+      - name: Generate and validate synthetic-drop SPDX SBOM
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SBOM_TOOL: ${{ steps.sbomtool.outputs.path }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/smoke/drop artifacts/smoke/sbom
+          printf 'G PC Health Check supply-chain smoke\n' > artifacts/smoke/drop/smoke.txt
+
+          "$SBOM_TOOL" generate \
+            -b "$GITHUB_WORKSPACE/artifacts/smoke/drop" \
+            -bc "$GITHUB_WORKSPACE" \
+            -m "$GITHUB_WORKSPACE/artifacts/smoke/sbom" \
+            -pn "G PC Health Check" \
+            -pv "$VERSION" \
+            -ps "Organization: G" \
+            -nsb "https://github.com/${{ github.repository }}" \
+            -mi SPDX:2.2
+
+          GENERATED=$(find artifacts/smoke/sbom -type f -name 'manifest.spdx.json' -print -quit)
+          test -n "$GENERATED" && test -s "$GENERATED"
+          jq -e '.spdxVersion == "SPDX-2.2"' "$GENERATED" >/dev/null
+          jq -e '.packages | length > 0' "$GENERATED" >/dev/null
+          jq -e '.files | length > 0' "$GENERATED" >/dev/null
+          jq -e '.files[] | select(.fileName | contains("smoke.txt"))' "$GENERATED" >/dev/null
+          echo "Supply-chain smoke passed: $GENERATED"
