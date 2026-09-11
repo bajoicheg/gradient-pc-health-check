@@ -2,11 +2,15 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
 
-Current release: **0.3.5**. The application is a self-contained single-file `Gradient-PC-Health-Check.exe`.
+Current project version: **0.3.6**. The application is a self-contained single-file `Gradient-PC-Health-Check.exe`.
 
 > **Security / privacy:** never attach an unreviewed `Gradient-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.3.5 does
+## What 0.3.6 does
+
+Runtime diagnostics and remediation behavior are unchanged from 0.3.5. Version 0.3.6 adds public-release supply-chain assurance: SPDX SBOM generation and signed GitHub/Sigstore artifact attestations for the tested EXE and pilot package.
+
+The application:
 
 - collects CPU, RAM, logical/physical disk, Windows/build, process, Event Log, startup, security-product, network and Windows Update signals;
 - calculates diagnostic coverage so missing telemetry is not shown as “healthy”;
@@ -59,13 +63,29 @@ Detailed model: [`docs/SECURITY.md`](docs/SECURITY.md).
 - SHA-256 generation;
 - pilot-bundle creation and strict UTF-8 validation.
 
-## Release model
+`main` is protected by an active repository ruleset: changes require a Pull Request, `build` and `analyzer` must pass against the current base branch, deletion and non-fast-forward updates are blocked, and linear history is required.
 
-A successful `Windows EXE` **push build on `main`** triggers `Publish GitHub Release`. The release workflow has the write permission required to create the GitHub Release, but re-validates that its triggering run is a successful `push` on `main`, checks out the exact tested SHA, downloads artifacts from that exact run and re-verifies the EXE checksum before publishing.
+## Release and artifact provenance
+
+A successful `Windows EXE` **push build on `main`** triggers `Publish GitHub Release`. The release workflow re-validates that its triggering run is a successful `push` on `main`, checks out the exact tested SHA, downloads artifacts from that exact run and re-verifies the EXE checksum before publishing.
+
+The same trusted build event also triggers `Supply Chain Attestations`. That workflow:
+
+- independently re-validates the source build run and exact commit SHA;
+- downloads the exact EXE and pilot artifacts produced by that build;
+- verifies the EXE SHA-256 again;
+- generates an SPDX 2.2 SBOM with the pinned Microsoft SBOM Tool;
+- generates signed GitHub Artifact Attestations using Sigstore for EXE and pilot build provenance;
+- binds the SPDX SBOM to the EXE with a signed SBOM attestation;
+- retains the SBOM and its SHA-256 as a dedicated Actions artifact.
+
+Attestations for public-repository builds can be verified with GitHub CLI, for example:
+
+```powershell
+gh attestation verify Gradient-PC-Health-Check.exe --repo bajoicheg/gradient-pc-health-check
+```
 
 Existing release tags are never overwritten automatically.
-
-For a public repository, `main` should be protected with a branch ruleset requiring Pull Requests and successful CI before merge.
 
 ## Building locally
 
@@ -95,4 +115,4 @@ The Gradient name, G-shield artwork and related branding assets are **not** gran
 
 ## Code signing
 
-0.3.5 publishes SHA-256 checksums but is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
+0.3.6 adds cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.

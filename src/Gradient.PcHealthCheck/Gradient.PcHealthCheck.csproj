@@ -9,9 +9,9 @@
     <RootNamespace>Gradient.PcHealthCheck</RootNamespace>
     <GeneratedBrandDir>$(MSBuildProjectDirectory)\obj\brand</GeneratedBrandDir>
     <ApplicationIcon>$(GeneratedBrandDir)\gpchc.ico</ApplicationIcon>
-    <Version>0.3.5</Version>
-    <FileVersion>0.3.5.0</FileVersion>
-    <AssemblyVersion>0.3.5.0</AssemblyVersion>
+    <Version>0.3.6</Version>
+    <FileVersion>0.3.6.0</FileVersion>
+    <AssemblyVersion>0.3.6.0</AssemblyVersion>
     <Product>Gradient PC Health Check</Product>
     <Company>Gradient</Company>
     <Description>Service Desk workstation diagnostics and controlled remediation for Windows 11.</Description>
