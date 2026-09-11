@@ -1,6 +1,16 @@
 # Changelog
 
-## 0.3.6 — SBOM and signed artifact attestations
+## 0.3.7 — Supply-chain attestation hotfix
+
+Hotfix for the public build-provenance pipeline; application runtime behavior is unchanged from 0.3.6/0.3.5.
+
+- Fixed `Supply Chain Attestations` dependency-metadata restore on the Linux runner by using `-p:EnableWindowsTargeting=true` for the Windows-targeting .NET project.
+- The Linux job performs only dependency metadata restore for SBOM component detection; the Windows application is still built and security-tested exclusively by the trusted `Windows EXE` workflow.
+- Keeps the same exact-run/SHA verification, SPDX 2.2 SBOM, Sigstore build provenance and signed SBOM design introduced in 0.3.6.
+- Version 0.3.6 itself built and released successfully, but its first supply-chain workflow stopped at `NETSDK1100` before SBOM generation or attestation. 0.3.7 supersedes it for the complete attested release path.
+- Application version: `0.3.7`.
+
+## 0.3.6 — Initial SBOM and artifact-attestation rollout
 
 Supply-chain hardening for the public repository; runtime diagnostics and remediation behavior are unchanged from 0.3.5.
 
@@ -12,6 +22,7 @@ Supply-chain hardening for the public repository; runtime diagnostics and remedi
 - Added a signed SBOM attestation binding the SPDX document to the released EXE.
 - All GitHub Actions remain pinned to full immutable commit SHAs; the attestation workflow has no `contents: write` permission.
 - SBOM JSON and its SHA-256 are retained as a dedicated Actions artifact for 90 days.
+- The Windows build and `v0.3.6` Release succeeded, but the first attestation run failed before SBOM generation because Linux restore of the Windows-targeting project required `EnableWindowsTargeting=true`; fixed in 0.3.7.
 - Application version: `0.3.6`.
 
 ## 0.3.5 — Service Desk UX, remediation boundary and Releases
