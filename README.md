@@ -1,106 +1,56 @@
 # G PC Health Check
 
-Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
+Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and controlled remediation.
 
-Current project version: **0.4.3**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.4.4**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
-> **Security / privacy:** never attach an unreviewed `G-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
+> **Security / privacy:** never attach an unreviewed `G-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. Evidence may include workstation names, usernames, domain information, hardware/OS details and diagnostic reports. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.4.3 adds
+## What 0.4.4 adds
 
-Version 0.4.3 prevents a false healthy result when a required diagnostic signal is missing. Coverage of 85–95% can still belong to the numeric `HIGH` band, but now always produces an explicit incomplete-data warning rather than `OK`. Missing data does not subtract health-score points, and a confirmed critical finding still takes priority.
+The next Service Desk step now comes from the primary finding itself. An action recommended for a secondary problem can no longer replace it: low-space Temp cleanup must not hide the guidance to investigate a failing physical disk and check backups. Blank primary guidance falls back to manual investigation before changes, not an unrelated action.
 
-Physical-disk health coverage now requires a known status for every discovered disk: one healthy disk cannot mask another disk with unavailable health. An unknown status reduces coverage without being treated as a confirmed disk failure. When the system disk was not measured, the optional CleanTemp recommendation says so instead of claiming that free space is sufficient.
+Clipboard observations use the same stable critical-first, penalty-second ordering as the triage card. The eight-observation limit is applied after prioritization; longer lists state the number omitted and point to the full HTML/JSON report. Presentation does not change scores, findings or selected actions.
 
-The release adds 22 synthetic regression scenarios to the existing source and published-EXE self-tests. See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md) for the distinction between score, status and diagnostic coverage.
+The release adds 19 synthetic regression scenarios. Details and pilot checks: [`docs/releases/0.4.4.md`](docs/releases/0.4.4.md).
 
 ## Diagnostic capabilities
 
-Version 0.4.2 improved diagnostic confidence for disk bottlenecks. A high disk queue no longer creates WARN/CRIT by itself: the assessment requires sustained queue pressure together with high median disk busy percentage, and incomplete busy/queue telemetry reduces diagnostic coverage instead of being treated as evidence of a bottleneck.
+The application collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security products, network and Windows Update signals. CPU and disk samples use short-series medians to reduce transient false positives. Disk-pressure findings require both elevated busy percentage and queue depth; repeated events are grouped by Provider/Event ID.
 
-The application:
+The dashboard displays score, diagnostic coverage, significant findings and the next Service Desk step. Missing signals appear in the System view, clipboard summary and reports. Process/event columns sort by typed numeric values. Scanning shows progress and elapsed time without a global busy cursor. HTML/JSON reports support before/after comparison.
 
-- collects CPU, RAM, logical/physical disk, Windows/build, process, Event Log, startup, security-product, network and Windows Update signals;
-- calculates diagnostic coverage so missing telemetry is not shown as “healthy”;
-- shows diagnostic coverage directly on the dashboard and colors degraded coverage;
-- summarizes the primary issue, CRIT/WARN counts and next Service Desk step in a dedicated triage card;
-- exposes missing diagnostic signals in the System view and report outputs;
-- can copy a concise Service Desk summary to the clipboard;
-- shows elapsed scan time without changing the mouse cursor to a global busy state;
-- samples CPU, disk busy and disk queue repeatedly and uses medians to reduce transient false positives;
-- classifies disk pressure only when both queue depth and disk busy are elevated;
-- groups repeated Windows events by Provider/Event ID;
-- sorts process/event numeric columns using typed values rather than formatted strings;
-- creates HTML/JSON before/after reports;
-- offers only an explicit allow-list of automated remediation actions.
+Since 0.4.3, every missing weighted diagnostic signal produces a data warning even if coverage is still in the numeric HIGH band. Missing data does not subtract score points; confirmed CRIT findings retain priority. Physical-health coverage requires a known status for every discovered disk. An unknown disk status is missing data, not proof of failure. Unmeasured system-disk space is explicitly identified in the optional cleanup recommendation.
+
+The score is not a probability of health. See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) and [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md).
 
 ## Remediation security boundary
 
-### Non-privileged
+Normal-user diagnostics and reports do not need elevation. `CleanTemp` removes only old ordinary files under the interactive user's `%LOCALAPPDATA%\Temp`; `FlushDns` is also available without the administrative worker.
 
-The following can run from a normal user context:
+`CleanTemp` does not clean Windows Temp, Prefetch or other system directories. It does not traverse reparse points, junctions or symbolic links, and refuses to run when the GUI is elevated.
 
-- diagnostics and reports;
-- `CleanTemp` — only old ordinary files under `%LOCALAPPDATA%\Temp` of the interactive user;
-- `FlushDns`.
-
-`CleanTemp` does not clean `%WINDIR%\Temp`, Prefetch or other system directories, does not traverse reparse points/junctions/symlinks, and fails closed if the GUI itself is already elevated.
-
-### Administrative
-
-`DISM /Online /Cleanup-Image /RestoreHealth` and `SFC /scannow` require UAC. The elevated worker is allowed to run only from the exact canonical path:
+`DISM /Online /Cleanup-Image /RestoreHealth` and `SFC /scannow` require UAC. The administrative worker is allowed only from the exact canonical installation path:
 
 `%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`
 
-The privileged worker:
+The worker validates that path, rejects reparse points, accepts only the fixed IDs `FlushDns`, `Dism`, `Sfc`, rejects `CleanTemp` and unknown/mixed action lists, and uses a one-time session ID and nonce over a local named pipe. Legacy bootstrap from user-writable locations remains disabled. See [`docs/SECURITY.md`](docs/SECURITY.md).
 
-- validates the canonical executable path and rejects reparse points;
-- accepts only the hardcoded action IDs `FlushDns`, `Dism`, `Sfc`;
-- does **not** accept `CleanTemp`;
-- rejects unknown and mixed known/unknown action lists;
-- uses a one-time session ID + nonce over a local named pipe;
-- keeps legacy bootstrap from user-writable locations disabled.
+## Build, CI and releases
 
-Detailed model: [`docs/SECURITY.md`](docs/SECURITY.md).
+The `Windows EXE` workflow runs on main pushes, pull requests and manual dispatch, with read-only repository permissions and pinned Actions. Its gates include PowerShell parsing/smoke, deterministic branding provenance, NuGet audit including transitive dependencies, warnings-as-errors build, source and single-EXE self-tests, negative worker tests, exact FileVersion, SHA-256 and pilot-package UTF-8 validation.
 
-## Build and CI
+The protected main branch requires a pull request and passing `build`, `analyzer` and `supply-chain-smoke` checks against the current base, with linear history and protection against deletion/non-fast-forward updates.
 
-`Windows EXE` runs on pushes to `main`, pull requests and manual dispatch. It uses read-only repository permissions and pinned GitHub Actions. The pipeline includes:
+A successful main push build triggers release publication and supply-chain attestations. Both validate the triggering run and exact tested SHA, download artifacts from that run and re-verify the EXE checksum. Existing release tags are not overwritten.
 
-- PowerShell parser/smoke gates;
-- deterministic brand-asset generation and SHA-256 provenance check;
-- .NET restore and NuGet vulnerability audit including transitive dependencies;
-- warnings-as-errors build;
-- source and published-single-EXE self-tests;
-- privileged-worker negative security tests;
-- exact FileVersion verification;
-- SHA-256 generation;
-- pilot-bundle creation and strict UTF-8 validation.
-
-`main` is protected by an active repository ruleset: changes require a Pull Request, `build`, `analyzer` and `supply-chain-smoke` must pass against the current base branch, deletion and non-fast-forward updates are blocked, and linear history is required.
-
-## Release and artifact provenance
-
-A successful `Windows EXE` **push build on `main`** triggers `Publish GitHub Release`. The release workflow re-validates that its triggering run is a successful `push` on `main`, checks out the exact tested SHA, downloads artifacts from that exact run and re-verifies the EXE checksum before publishing.
-
-The same trusted build event also triggers `Supply Chain Attestations`. That workflow:
-
-- independently re-validates the source build run and exact commit SHA;
-- downloads the exact EXE and pilot artifacts produced by that build;
-- verifies the EXE SHA-256 again;
-- restores only dependency metadata on Linux with Windows targeting explicitly enabled for component detection;
-- generates an SPDX 2.2 SBOM with the pinned Microsoft SBOM Tool;
-- generates signed GitHub Artifact Attestations using Sigstore for EXE and pilot build provenance;
-- binds the SPDX SBOM to the EXE with a signed SBOM attestation;
-- retains the SBOM and its SHA-256 as a dedicated Actions artifact.
-
-Attestations for public-repository builds can be verified with GitHub CLI, for example:
+The supply-chain workflow generates an SPDX 2.2 SBOM using the pinned Microsoft SBOM Tool, signs EXE/pilot build provenance with GitHub Artifact Attestations, binds the SBOM to the EXE, and retains SBOM/checksum artifacts. Linux restore is dependency-metadata-only with Windows targeting enabled; the Windows application is built on Windows. See [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
 
 ```powershell
 gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
-Pull-request artifacts are test builds, not published releases, and do not receive this main-branch release attestation. Existing release tags are never overwritten automatically.
+Pull-request builds are not published releases and do not receive main-release attestations. A CI success is not a substitute for Windows 11 workstation GUI/UAC/remediation E2E.
 
 ## Building locally
 
@@ -110,24 +60,13 @@ Prerequisites: Windows 11 x64 and .NET 8 SDK.
 dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj
 dotnet build src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -warnaserror
 dotnet run --project src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -- --selftest
-```
-
-Single-file publish:
-
-```powershell
 dotnet publish src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish
 ```
 
-## Contributing
+## Contributing, licensing and signing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Public bug reports must use synthetic or redacted data. Security vulnerabilities should be reported privately as described in [`SECURITY.md`](SECURITY.md).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Use synthetic or redacted data for public reports; report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
 
-## License and branding
+Source code is licensed under Apache License 2.0; see [`LICENSE`](LICENSE). The G name, G-shield and related branding are not granted under that license and remain reserved to their owners; see [`NOTICE`](NOTICE).
 
-Source code is licensed under the **Apache License 2.0**; see [`LICENSE`](LICENSE).
-
-The G name, G-shield artwork and related branding assets are **not** granted under Apache-2.0 and remain reserved to their respective owner(s). See [`NOTICE`](NOTICE) for the branding exception.
-
-## Code signing
-
-The release pipeline provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
+The PE is not yet Authenticode-signed. Build/SBOM provenance does not replace a Windows publisher signature. For managed deployment, verify the checksum and attestation and use an approved distribution channel; signing and publisher controls remain recommended before broad rollout.

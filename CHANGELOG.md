@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.4 — Primary guidance and critical-first support summary
+
+- The triage next step uses the primary finding's recommendation; an unrelated recommended action no longer overrides it.
+- Missing primary guidance falls back to manual investigation before system changes.
+- Clipboard observations use the same stable severity/penalty ordering as triage before the eight-observation limit.
+- Longer observation lists explicitly state the number omitted and refer to the complete HTML/JSON report.
+- Added 19 synthetic regression scenarios for competing findings, missing guidance, ordering, truncation, unchanged action state and null arguments.
+- No changes to diagnostics collection, assessment thresholds, score, remediation scope, privileged worker, IPC, elevation or CI workflows.
+- Application version: `0.4.4`. Details: `docs/releases/0.4.4.md`.
+
 ## 0.4.3 — Diagnostic completeness
 
 - Any missing weighted diagnostic signal now produces an explicit `WARN / Данные`, even when numeric coverage remains in the `HIGH` band (85–100%).

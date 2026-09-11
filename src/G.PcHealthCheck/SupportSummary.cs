@@ -4,6 +4,8 @@ namespace G.PcHealthCheck;
 
 internal static class SupportSummary
 {
+    private const int MaxFindings = 8;
+
     public static string Build(ScanResult scan)
     {
         ArgumentNullException.ThrowIfNull(scan);
@@ -28,12 +30,14 @@ internal static class SupportSummary
         if (d.CollectionWarnings.Count > 0)
             sb.AppendLine("Предупреждения сбора: " + string.Join(" | ", d.CollectionWarnings));
 
-        var significant = a.Findings.Where(x => x.Severity is "CRIT" or "WARN").Take(8).ToList();
+        var significant = TriageSummary.SignificantFindings(scan);
         if (significant.Count > 0)
         {
             sb.AppendLine("Наблюдения:");
-            foreach (var finding in significant)
+            foreach (var finding in significant.Take(MaxFindings))
                 sb.AppendLine($"- [{finding.Severity}] {finding.Title}: {finding.Value}");
+            if (significant.Count > MaxFindings)
+                sb.AppendLine($"Ещё наблюдений: {significant.Count - MaxFindings}. Полный список — в отчёте HTML/JSON.");
         }
 
         var recommended = scan.Actions.Where(x => x.Preselected || x.Kind == "Рекомендуется").Take(8).ToList();

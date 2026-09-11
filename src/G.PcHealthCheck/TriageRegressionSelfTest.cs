@@ -4,6 +4,7 @@ internal static class TriageRegressionSelfTest
 {
     public static int Run()
     {
+        var guidanceResult = GuidanceRegressionSelfTest.Run();
         var service = new AssessmentService();
 
         var healthy = service.Assess(HealthyData());
@@ -19,14 +20,14 @@ internal static class TriageRegressionSelfTest
         var critical = service.Assess(criticalData);
         var criticalTriage = TriageSummary.Build(critical);
         if (criticalTriage.CriticalCount < 1 || !criticalTriage.Title.StartsWith("Критично:", StringComparison.Ordinal)) return 5;
-        if (!criticalTriage.NextAction.Contains("временные файлы", StringComparison.OrdinalIgnoreCase)) return 6;
+        if (criticalTriage.NextAction != critical.Assessment.Findings.Single(x => x.Severity == "CRIT").Recommendation) return 6;
 
         var missing = service.Assess(new DiagnosticData { System = new SystemInfo { ComputerName = "MISSING", UptimeDays = 1 } });
         var missingTriage = TriageSummary.Build(missing);
         if (missingTriage.WarningCount < 1) return 7;
         if (!missingTriage.Detail.Contains("покрытие", StringComparison.OrdinalIgnoreCase)) return 8;
         if (!missingTriage.NextAction.Contains("Повторите диагностику", StringComparison.OrdinalIgnoreCase)) return 9;
-        return 0;
+        return guidanceResult;
     }
 
     private static DiagnosticData HealthyData()

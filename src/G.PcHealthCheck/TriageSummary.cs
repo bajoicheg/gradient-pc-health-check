@@ -12,20 +12,25 @@ internal sealed class TriageInsight
 
 internal static class TriageSummary
 {
-    public static TriageInsight Build(ScanResult scan)
+    // One stable ordering for the primary insight and the limited clipboard list.
+    // Materialize a new list: presentation must not mutate assessment or action state.
+    internal static List<Finding> SignificantFindings(ScanResult scan)
     {
         ArgumentNullException.ThrowIfNull(scan);
-
-        var significant = scan.Assessment.Findings
+        return scan.Assessment.Findings
             .Where(x => x.Severity is "CRIT" or "WARN")
             .OrderBy(x => x.Severity == "CRIT" ? 0 : 1)
             .ThenByDescending(x => x.Penalty)
             .ToList();
+    }
 
+    public static TriageInsight Build(ScanResult scan)
+    {
+        ArgumentNullException.ThrowIfNull(scan);
+        var significant = SignificantFindings(scan);
         var critical = significant.Count(x => x.Severity == "CRIT");
         var warning = significant.Count(x => x.Severity == "WARN");
         var primary = significant.FirstOrDefault();
-        var recommended = scan.Actions.FirstOrDefault(x => x.Kind == "Рекомендуется" || x.Preselected);
 
         if (primary is null)
         {
@@ -40,9 +45,9 @@ internal static class TriageSummary
             };
         }
 
-        var nextAction = recommended?.Title;
-        if (string.IsNullOrWhiteSpace(nextAction))
-            nextAction = primary.Recommendation;
+        // A globally recommended action can concern a secondary problem (e.g. Temp
+        // cleanup while a physical disk is failing). Never substitute it here.
+        var nextAction = primary.Recommendation;
         if (string.IsNullOrWhiteSpace(nextAction))
             nextAction = "Изучить основное наблюдение и подтвердить причину до изменения системы.";
 
