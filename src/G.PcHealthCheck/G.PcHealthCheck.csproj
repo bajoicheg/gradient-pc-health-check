@@ -9,9 +9,9 @@
     <RootNamespace>G.PcHealthCheck</RootNamespace>
     <GeneratedBrandDir>$(MSBuildProjectDirectory)\obj\brand</GeneratedBrandDir>
     <ApplicationIcon>$(GeneratedBrandDir)\gpchc.ico</ApplicationIcon>
-    <Version>0.4.3</Version>
-    <FileVersion>0.4.3.0</FileVersion>
-    <AssemblyVersion>0.4.3.0</AssemblyVersion>
+    <Version>0.4.4</Version>
+    <FileVersion>0.4.4.0</FileVersion>
+    <AssemblyVersion>0.4.4.0</AssemblyVersion>
     <Product>G PC Health Check</Product>
     <Company>G</Company>
     <Description>Service Desk workstation diagnostics and controlled remediation for Windows 11.</Description>
