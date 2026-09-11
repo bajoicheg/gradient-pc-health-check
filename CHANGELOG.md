@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 — Service Desk triage clarity
+
+- Added a dedicated triage card above recommendations: primary finding, CRIT/WARN counts, diagnostic coverage and the next Service Desk step.
+- Prioritizes critical findings before warnings and prefers an explicitly recommended/preselected remediation as the next step when one exists.
+- Highlights CRIT/WARN finding rows for faster visual scanning.
+- Shows diagnostic coverage and missing signals directly in the System tab and HTML reports.
+- Adds the same triage context to clipboard summaries.
+- Fixed clipboard summary system-drive lookup (`C:` rather than `C:\`), so free-space data is no longer lost.
+- Added healthy, critical-disk, incomplete-telemetry and system-drive regression self-tests.
+- Application version: `0.4.1`.
+
 ## 0.4.0 — Service Desk product UX
 
 First product-focused release after the public rename/supply-chain baseline.

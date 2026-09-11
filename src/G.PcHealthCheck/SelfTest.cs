@@ -13,6 +13,7 @@ internal static class SelfTest
             if (TestRepeatedEventsAreActionable() != 0) return 51;
             if (TestTrustedElevationLocations() != 0) return 61;
             if (TestSupportSummary() != 0) return 71;
+            if (TriageRegressionSelfTest.Run() != 0) return 81;
             return 0;
         }
         catch { return 99; }
