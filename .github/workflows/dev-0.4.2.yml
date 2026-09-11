@@ -20,6 +20,7 @@ jobs:
       - name: Apply 0.4.2 changes
         shell: pwsh
         run: |
+          python .github/scripts/fix-apply-042.py
           python .github/scripts/apply-042.py
           git diff --check
 
@@ -48,7 +49,7 @@ jobs:
       - name: Commit prepared 0.4.2
         shell: pwsh
         run: |
-          Remove-Item .github/scripts/apply-042.py,.github/workflows/dev-0.4.2.yml -Force
+          Remove-Item .github/scripts/apply-042.py,.github/scripts/fix-apply-042.py,.github/workflows/dev-0.4.2.yml -Force
           git add -A
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
