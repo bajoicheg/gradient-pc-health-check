@@ -1,0 +1,225 @@
+from pathlib import Path
+import re
+
+
+def read(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8")
+
+
+def write(path: str, text: str) -> None:
+    Path(path).write_text(text, encoding="utf-8", newline="\n")
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    text = read(path)
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{path}: expected exactly one match, found {count}: {old[:80]!r}")
+    write(path, text.replace(old, new, 1))
+
+
+project = "src/G.PcHealthCheck/G.PcHealthCheck.csproj"
+text = read(project)
+for old, new in [
+    ("<Version>0.3.8</Version>", "<Version>0.4.0</Version>"),
+    ("<FileVersion>0.3.8.0</FileVersion>", "<FileVersion>0.4.0.0</FileVersion>"),
+    ("<AssemblyVersion>0.3.8.0</AssemblyVersion>", "<AssemblyVersion>0.4.0.0</AssemblyVersion>"),
+]:
+    if old not in text:
+        raise SystemExit(f"Missing version token: {old}")
+    text = text.replace(old, new, 1)
+write(project, text)
+
+main = "src/G.PcHealthCheck/MainForm.cs"
+replace_once(
+    main,
+    "    private readonly Label _uptime = new();\n    private readonly Label _status = new();",
+    "    private readonly Label _uptime = new();\n    private readonly Label _coverage = new();\n    private readonly Label _status = new();",
+)
+replace_once(
+    main,
+    "    private readonly Button _openFolder = new();\n    private readonly DataGridView _actions = new();",
+    "    private readonly Button _openFolder = new();\n    private readonly Button _copySummary = new();\n    private readonly DataGridView _actions = new();",
+)
+replace_once(
+    main,
+    '        var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, Margin = new Padding(0, 0, 0, 10) };\n        for (var i = 0; i < 5; i++) t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));\n        t.Controls.Add(Metric("ИНДЕКС", _score, _state), 0, 0);\n        t.Controls.Add(Metric("CPU", _cpu, Small("текущая загрузка")), 1, 0);\n        t.Controls.Add(Metric("RAM", _ram, Small("использовано")), 2, 0);\n        t.Controls.Add(Metric("СИСТЕМНЫЙ ДИСК", _disk, Small("свободно")), 3, 0);\n        t.Controls.Add(Metric("UPTIME", _uptime, Small("с последней загрузки")), 4, 0);',
+    '        var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1, Margin = new Padding(0, 0, 0, 10) };\n        for (var i = 0; i < 6; i++) t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 6F));\n        t.Controls.Add(Metric("ИНДЕКС", _score, _state), 0, 0);\n        t.Controls.Add(Metric("ПОКРЫТИЕ", _coverage, Small("полнота диагностики")), 1, 0);\n        t.Controls.Add(Metric("CPU", _cpu, Small("текущая загрузка")), 2, 0);\n        t.Controls.Add(Metric("RAM", _ram, Small("использовано")), 3, 0);\n        t.Controls.Add(Metric("СИСТЕМНЫЙ ДИСК", _disk, Small("свободно")), 4, 0);\n        t.Controls.Add(Metric("UPTIME", _uptime, Small("с последней загрузки")), 5, 0);',
+)
+replace_once(
+    main,
+    '        SetupButton(_openFolder, "Папка отчётов", 535, false); _openFolder.Width = 125; _openFolder.Click += (_, _) => OpenFolder(); p.Controls.Add(_openFolder);\n        _progress.Style = ProgressBarStyle.Marquee;',
+    '        SetupButton(_openFolder, "Папка отчётов", 535, false); _openFolder.Width = 125; _openFolder.Click += (_, _) => OpenFolder(); p.Controls.Add(_openFolder);\n        SetupButton(_copySummary, "Копировать сводку", 670, false); _copySummary.Width = 155; _copySummary.Click += (_, _) => CopySummary(); p.Controls.Add(_copySummary);\n        _progress.Style = ProgressBarStyle.Marquee;',
+)
+replace_once(
+    main,
+    "        p.Resize += (_, _) => { _progress.Location = new Point(Math.Max(700, p.ClientSize.Width - 190), 9); _status.Location = new Point(Math.Max(650, p.ClientSize.Width - _status.Width - 10), 27); };",
+    "        p.Resize += (_, _) => { _progress.Location = new Point(Math.Max(840, p.ClientSize.Width - 190), 9); _status.Location = new Point(Math.Max(790, p.ClientSize.Width - _status.Width - 10), 27); };",
+)
+replace_once(
+    main,
+    "    private async Task ScanAsync()\n    {\n        try",
+    "    private async Task ScanAsync()\n    {\n        var started = Stopwatch.StartNew();\n        try",
+)
+replace_once(
+    main,
+    '            _status.Text = $"Готово · {DateTime.Now:HH:mm:ss}";',
+    '            _status.Text = $"Готово · {DateTime.Now:HH:mm:ss} · {started.Elapsed.TotalSeconds:0.0} с";',
+)
+replace_once(
+    main,
+    '        _uptime.Text = $"{d.System.UptimeDays:0.#} дн.";',
+    '        _uptime.Text = $"{d.System.UptimeDays:0.#} дн.";\n        _coverage.Text = $"{scan.Assessment.CoveragePercent}%";\n        _coverage.ForeColor = scan.Assessment.CoverageStatus == "HIGH" ? Ok : scan.Assessment.CoverageStatus == "MEDIUM" ? Warn : Crit;',
+)
+replace_once(
+    main,
+    "        Cursor = value ? Cursors.WaitCursor : Cursors.Default;\n        UpdateApplyState();",
+    "        // Do not switch the form-wide cursor for background work. DataGridView/native child\n        // handles can retain an inherited busy cursor after async work has completed.\n        UpdateApplyState();",
+)
+replace_once(
+    main,
+    "        _openFolder.Enabled = !value;\n        _progress.Visible = value;",
+    "        _openFolder.Enabled = !value;\n        _copySummary.Enabled = !value && _current is not null;\n        _progress.Visible = value;",
+)
+replace_once(
+    main,
+    "    private void OpenReport()\n    {",
+    '''    private void CopySummary()
+    {
+        if (_current is null) return;
+        try
+        {
+            Clipboard.SetText(SupportSummary.Build(_current));
+            _status.Text = $"Сводка скопирована · {DateTime.Now:HH:mm:ss}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Не удалось скопировать сводку", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void OpenReport()
+    {''',
+)
+
+support = r'''using System.Text;
+
+namespace G.PcHealthCheck;
+
+internal static class SupportSummary
+{
+    public static string Build(ScanResult scan)
+    {
+        ArgumentNullException.ThrowIfNull(scan);
+        var d = scan.Data;
+        var a = scan.Assessment;
+        var systemDrive = d.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:\\", StringComparison.OrdinalIgnoreCase));
+        var sb = new StringBuilder();
+
+        sb.AppendLine("G PC Health Check");
+        sb.AppendLine($"Компьютер: {d.System.ComputerName}");
+        sb.AppendLine($"Пользователь: {d.System.UserName}");
+        sb.AppendLine($"Статус: {a.Status}; индекс: {a.Score}/100");
+        sb.AppendLine($"Покрытие: {a.CoveragePercent}% ({a.CoverageStatus})");
+        sb.AppendLine($"CPU: {Format(d.Performance.CpuPercent, "%")}; RAM: {Format(d.Performance.MemoryUsedPercent, "%")}; C: {(systemDrive is null ? "—" : $"{systemDrive.FreeGB:0.#} GB свободно")}; uptime: {d.System.UptimeDays:0.#} дн.");
+
+        if (a.MissingSignals.Count > 0)
+            sb.AppendLine("Недоступные сигналы: " + string.Join(", ", a.MissingSignals));
+        if (d.CollectionWarnings.Count > 0)
+            sb.AppendLine("Предупреждения сбора: " + string.Join(" | ", d.CollectionWarnings));
+
+        var significant = a.Findings.Where(x => x.Severity is "CRIT" or "WARN").Take(8).ToList();
+        if (significant.Count > 0)
+        {
+            sb.AppendLine("Наблюдения:");
+            foreach (var finding in significant)
+                sb.AppendLine($"- [{finding.Severity}] {finding.Title}: {finding.Value}");
+        }
+
+        var recommended = scan.Actions.Where(x => x.Preselected || x.Kind == "Рекомендуется").Take(8).ToList();
+        if (recommended.Count > 0)
+        {
+            sb.AppendLine("Рекомендуемые действия:");
+            foreach (var action in recommended)
+                sb.AppendLine($"- {action.Title}{(action.RequiresAdmin ? " [Admin]" : "")}");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string Format(double? value, string suffix)
+        => value is null ? "—" : $"{value:0.#}{suffix}";
+}
+'''
+write("src/G.PcHealthCheck/SupportSummary.cs", support)
+
+selftest = "src/G.PcHealthCheck/SelfTest.cs"
+replace_once(
+    selftest,
+    "            if (TestTrustedElevationLocations() != 0) return 61;\n            return 0;",
+    "            if (TestTrustedElevationLocations() != 0) return 61;\n            if (TestSupportSummary() != 0) return 71;\n            return 0;",
+)
+replace_once(
+    selftest,
+    "    private static DiagnosticData HealthyData()\n",
+    '''    private static int TestSupportSummary()
+    {
+        var result = new AssessmentService().Assess(HealthyData());
+        var summary = SupportSummary.Build(result);
+        if (!summary.Contains("Компьютер: TEST", StringComparison.Ordinal)) return 1;
+        if (!summary.Contains("Статус: OK; индекс: 100/100", StringComparison.Ordinal)) return 2;
+        if (!summary.Contains("Покрытие: 100% (HIGH)", StringComparison.Ordinal)) return 3;
+        return 0;
+    }
+
+    private static DiagnosticData HealthyData()
+''',
+)
+
+readme = "README.md"
+text = read(readme)
+text = text.replace("Current project version: **0.3.8**.", "Current project version: **0.4.0**.", 1)
+old_section = """## What 0.3.8 does
+
+Runtime diagnostics and remediation behavior are unchanged from 0.3.5. Version 0.3.8 completes the public-release supply-chain assurance introduced in 0.3.6: SPDX SBOM generation and signed GitHub/Sigstore artifact attestations for the tested EXE and pilot package. The 0.3.8 hotfix allows dependency-metadata restore for the Windows-targeting project on the Linux attestation runner without building the application there.
+"""
+new_section = """## What 0.4.0 adds
+
+Version 0.4.0 returns focus to the Service Desk product experience while preserving the 0.3.8 security and supply-chain boundary. It makes diagnostic coverage visible in the main dashboard, records scan duration, adds a copy-ready support summary, and removes the form-wide busy cursor that could remain visually stuck over DataGridView regions after asynchronous diagnostics.
+"""
+if old_section not in text:
+    raise SystemExit("README 0.3.8 section not found")
+text = text.replace(old_section, new_section, 1)
+text = text.replace("`build` and `analyzer` must pass against the current base branch", "`build`, `analyzer` and `supply-chain-smoke` must pass against the current base branch", 1)
+text = text.replace("0.3.8 provides cryptographic build/SBOM provenance", "0.4.0 provides cryptographic build/SBOM provenance", 1)
+marker = '- calculates diagnostic coverage so missing telemetry is not shown as “healthy”;'
+if marker not in text:
+    raise SystemExit("README coverage bullet not found")
+text = text.replace(marker, marker + "\n- shows diagnostic coverage directly on the dashboard and colors degraded coverage;\n- can copy a concise Service Desk summary to the clipboard;\n- shows elapsed scan time without changing the mouse cursor to a global busy state;", 1)
+write(readme, text)
+
+changelog = "CHANGELOG.md"
+text = read(changelog)
+pattern = re.compile(r"(## 0\.3\.8 — rename to G PC Health Check\n\n.*?- Application version: `0\.3\.8`\.\n\n)\1", re.S)
+text, collapsed = pattern.subn(r"\1", text, count=1)
+entry = """## 0.4.0 — Service Desk product UX
+
+First product-focused release after the public rename/supply-chain baseline.
+
+- Removed the form-wide `WaitCursor`; progress is communicated through the existing progress bar/status and disabled controls, preventing a sticky busy cursor over DataGridView regions after async diagnostics.
+- Added a visible diagnostic coverage metric to the main dashboard with HIGH/MEDIUM/LOW coloring.
+- Added elapsed scan duration to the completion status.
+- Added `Копировать сводку` for a concise clipboard-ready Service Desk summary with host/user, health score, coverage, key metrics, significant findings and recommended actions.
+- Added a self-test for the support-summary contract.
+- Updated protected-branch documentation to include required `supply-chain-smoke`.
+- Application version: `0.4.0`.
+
+"""
+if not text.startswith("# Changelog\n\n"):
+    raise SystemExit("Unexpected changelog header")
+text = "# Changelog\n\n" + entry + text[len("# Changelog\n\n"):]
+write(changelog, text)
+print(f"collapsed duplicate 0.3.8 changelog sections: {collapsed}")
+
+Path(".github/workflows/dev-0.4.0.yml").unlink(missing_ok=True)
+Path("tools/ci/prepare_040.py").unlink(missing_ok=True)
