@@ -12,7 +12,7 @@ internal static class SupportSummary
         var d = scan.Data;
         var a = scan.Assessment;
         var triage = TriageSummary.Build(scan);
-        var systemDrive = d.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:", StringComparison.OrdinalIgnoreCase));
+        var systemDrive = SystemDiskSelection.Find(d);
         var sb = new StringBuilder();
 
         sb.AppendLine("G PC Health Check");
@@ -22,7 +22,7 @@ internal static class SupportSummary
         sb.AppendLine($"Покрытие: {a.CoveragePercent}% ({a.CoverageStatus})");
         sb.AppendLine($"Triage: {triage.Title}");
         sb.AppendLine($"Следующий шаг: {triage.NextAction}");
-        sb.AppendLine($"CPU: {Format(d.Performance.CpuPercent, "%")}; RAM: {Format(d.Performance.MemoryUsedPercent, "%")}; C: {(systemDrive is null ? "—" : $"{systemDrive.FreeGB:0.#} GB свободно")}; uptime: {d.System.UptimeDays:0.#} дн.");
+        sb.AppendLine($"CPU: {Format(d.Performance.CpuPercent, "%")}; RAM: {Format(d.Performance.MemoryUsedPercent, "%")}; {SystemDiskSelection.CurrentDriveId ?? "Системный диск"} {(systemDrive is null ? "—" : $"{systemDrive.FreeGB:0.#} GB свободно")}; uptime: {d.System.UptimeDays:0.#} дн.");
         sb.AppendLine($"Диск I/O: busy {Format(d.Performance.DiskBusyPercent, "%")}; queue {Format(d.Performance.DiskQueueLength, "")}");
 
         if (a.MissingSignals.Count > 0)

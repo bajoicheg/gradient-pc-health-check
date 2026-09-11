@@ -318,7 +318,7 @@ public sealed class MainForm : Form
         _state.Text = scan.Assessment.Status == "OK" ? "норма" : scan.Assessment.Status == "WARN" ? "внимание" : "критично"; _state.ForeColor = _score.ForeColor;
         _host.Text = $"{d.System.ComputerName} · {d.System.UserName}";
         _cpu.Text = F(d.Performance.CpuPercent, "%"); _ram.Text = F(d.Performance.MemoryUsedPercent, "%");
-        var sd = d.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:", StringComparison.OrdinalIgnoreCase)); _disk.Text = sd is null ? "—" : $"{sd.FreeGB:0.#} GB";
+        var sd = SystemDiskSelection.Find(d); _disk.Text = sd is null ? "—" : $"{sd.FreeGB:0.#} GB";
         _uptime.Text = $"{d.System.UptimeDays:0.#} дн.";
         _coverage.Text = $"{scan.Assessment.CoveragePercent}%";
         _coverage.ForeColor = scan.Assessment.CoverageStatus == "HIGH" ? Ok : scan.Assessment.CoverageStatus == "MEDIUM" ? Warn : Crit;
@@ -370,6 +370,7 @@ public sealed class MainForm : Form
         _system.Rows.Clear(); void Add(string k, string v) => _system.Rows.Add(k, v);
         Add("Компьютер", d.System.ComputerName); Add("Пользователь", d.System.UserName); Add("Производитель / модель", (d.System.Manufacturer + " " + d.System.Model).Trim());
         Add("Windows", $"{d.System.OS} {d.System.OSVersion} build {d.System.BuildNumber}"); Add("CPU", d.System.Cpu); Add("RAM", $"{d.System.TotalMemoryGB:0.#} GB");
+        Add("Системный том Windows", SystemDiskSelection.CurrentDriveId ?? "Не определён");
         Add("Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Add("Права процесса", d.System.IsAdministrator ? "Administrator" : "Standard user");
         Add("Покрытие диагностики", $"{scan.Assessment.CoveragePercent}% ({scan.Assessment.CoverageStatus})");
         Add("Недоступные сигналы", scan.Assessment.MissingSignals.Count == 0 ? "Нет" : string.Join("; ", scan.Assessment.MissingSignals));

@@ -164,7 +164,7 @@ public sealed class AssessmentService
         Add(new ActionRecommendation
         {
             Id = "Sfc", Kind = "Дополнительно", Title = "SFC /scannow",
-            Reason = "Использовать при подозрении на повреждение системных файлов. Если выбран DISM, SFC выполняется после него.",
+            Reason = "Использовать при подозрении на повреждении системных файлов. Если выбран DISM, SFC выполняется после него.",
             CanAutomate = true, RequiresAdmin = true, Preselected = false, Risk = "Средний", Verification = "Зафиксировать exit code и результат повторной диагностики."
         });
 
@@ -210,12 +210,7 @@ public sealed class AssessmentService
     private static int MaxRepeatedEventCount(EventSummary events)
         => events.Top.Count == 0 ? 0 : events.Top.Max(x => x.Count);
 
-    private static LogicalDiskInfo? SystemDrive(DiagnosticData data)
-    {
-        var drive = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\');
-        return data.LogicalDisks.FirstOrDefault(x => !string.IsNullOrWhiteSpace(drive) && string.Equals(x.Drive, drive, StringComparison.OrdinalIgnoreCase))
-               ?? data.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:", StringComparison.OrdinalIgnoreCase));
-    }
+    private static LogicalDiskInfo? SystemDrive(DiagnosticData data) => SystemDiskSelection.Find(data);
 
     private static bool IsHealthyDisk(string status)
         => string.IsNullOrWhiteSpace(status) || status.Equals("Healthy", StringComparison.OrdinalIgnoreCase) || status.Equals("OK", StringComparison.OrdinalIgnoreCase) || status.Equals("Unknown", StringComparison.OrdinalIgnoreCase);

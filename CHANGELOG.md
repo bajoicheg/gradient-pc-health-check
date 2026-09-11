@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.1 — Consistent system-volume diagnostics
+
+- Unified system-volume selection across assessment, main dashboard, clipboard summary and HTML/before-after reporting.
+- Resolves the local Windows volume instead of assuming C: or falling back to another disk when telemetry is missing.
+- Normalizes equivalent drive-root forms without mutating collected records.
+- Rejects ambiguous duplicate identities and invalid capacity/free-space measurements as unavailable evidence; missing data does not preselect cleanup or fabricate a health-score penalty.
+- Preserves a measured zero free space as a critical finding and unavailable comparison values/deltas as missing.
+- Shows the Windows-volume identity in the System tab, HTML System section and comparison label.
+- Added 24 synthetic regressions. No collector, worker, IPC, elevation, remediation allow-list, dependency or CI-permission changes.
+- Application version: `0.5.1`; FileVersion: `0.5.1.0`. Local-diagnostics scope and pilot checks: `docs/releases/0.5.1.md`.
+
 ## 0.5.0 — Common workstation problems
 
 - Added a dedicated window for local network/IP/DNS configuration, printing/Spooler state and Plug-and-Play device errors, accessible from the single EXE menu.
