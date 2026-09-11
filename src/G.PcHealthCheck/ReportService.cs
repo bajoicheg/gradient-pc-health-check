@@ -55,7 +55,7 @@ public sealed class ReportService
             ("Индекс", before.Assessment.Score.ToString(), after.Assessment.Score.ToString(), Signed(after.Assessment.Score - before.Assessment.Score)),
             ("CPU", F(before.Data.Performance.CpuPercent, "%"), F(after.Data.Performance.CpuPercent, "%"), Delta(before.Data.Performance.CpuPercent, after.Data.Performance.CpuPercent, "%")),
             ("RAM доступно", F(before.Data.Performance.MemoryAvailablePercent, "%"), F(after.Data.Performance.MemoryAvailablePercent, "%"), Delta(before.Data.Performance.MemoryAvailablePercent, after.Data.Performance.MemoryAvailablePercent, "%")),
-            ("Свободно C:", bd is null ? "—" : $"{bd.FreeGB:0.0} GB", ad is null ? "—" : $"{ad.FreeGB:0.0} GB", bd is null || ad is null ? "—" : Signed(ad.FreeGB - bd.FreeGB, " GB")),
+            ($"Свободно на системном диске ({SystemDiskSelection.CurrentDriveId ?? "не определён"})", bd is null ? "—" : $"{bd.FreeGB:0.0} GB", ad is null ? "—" : $"{ad.FreeGB:0.0} GB", bd is null || ad is null ? "—" : Signed(ad.FreeGB - bd.FreeGB, " GB")),
             ("Занятость диска", F(before.Data.Performance.DiskBusyPercent, "%"), F(after.Data.Performance.DiskBusyPercent, "%"), Delta(before.Data.Performance.DiskBusyPercent, after.Data.Performance.DiskBusyPercent, "%")),
             ("Очередь диска", F(before.Data.Performance.DiskQueueLength, ""), F(after.Data.Performance.DiskQueueLength, ""), Delta(before.Data.Performance.DiskQueueLength, after.Data.Performance.DiskQueueLength, "")),
             ("Critical/Error за 24ч", (before.Data.Events.CriticalCount + before.Data.Events.ErrorCount).ToString(), (after.Data.Events.CriticalCount + after.Data.Events.ErrorCount).ToString(), Signed((after.Data.Events.CriticalCount + after.Data.Events.ErrorCount) - (before.Data.Events.CriticalCount + before.Data.Events.ErrorCount))),
@@ -180,13 +180,14 @@ public sealed class ReportService
         var d = scan.Data;
         sb.Append("<section><h2>Система</h2><table><tbody>");
         Row(sb, "ПК", d.System.ComputerName); Row(sb, "Пользователь", d.System.UserName); Row(sb, "Производитель / модель", d.System.Manufacturer + " " + d.System.Model); Row(sb, "Windows", d.System.OS + " " + d.System.OSVersion + " build " + d.System.BuildNumber); Row(sb, "CPU", d.System.Cpu); Row(sb, "RAM", $"{d.System.TotalMemoryGB:0.#} GB"); Row(sb, "Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Row(sb, "Права процесса", d.System.IsAdministrator ? "Administrator" : "Standard user"); Row(sb, "Windows Update", $"wuauserv={d.Updates.Wuauserv}; BITS={d.Updates.Bits}"); Row(sb, "Антивирус / EDR", d.SecurityProducts.Count == 0 ? "Не удалось определить" : string.Join("; ", d.SecurityProducts.Select(x => x.Name + " [" + x.State + "]")));
+        Row(sb, "Системный том Windows", SystemDiskSelection.CurrentDriveId ?? "Не определён");
         sb.Append("</tbody></table>");
         if (d.CollectionWarnings.Count > 0) sb.Append("<h3>Предупреждения сбора</h3><ul>").Append(string.Join("", d.CollectionWarnings.Select(x => "<li>" + H(x) + "</li>"))).Append("</ul>");
         sb.Append("</section>");
     }
 
     private static void Row(StringBuilder sb, string k, string v) => sb.Append("<tr><th>").Append(H(k)).Append("</th><td>").Append(H(v)).Append("</td></tr>");
-    private static LogicalDiskInfo? SystemDisk(DiagnosticData d) => d.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:", StringComparison.OrdinalIgnoreCase));
+    private static LogicalDiskInfo? SystemDisk(DiagnosticData d) => SystemDiskSelection.Find(d);
     private static string F(double? v, string suffix) => v is null ? "—" : $"{v:0.#}{suffix}";
     private static string Delta(double? b, double? a, string suffix) => b is null || a is null ? "—" : Signed(a.Value - b.Value, suffix);
     private static string Signed(double v, string suffix = "") => (v > 0 ? "+" : "") + v.ToString("0.##") + suffix;
