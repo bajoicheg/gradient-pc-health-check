@@ -14,6 +14,7 @@ internal static class SelfTest
             if (TestTrustedElevationLocations() != 0) return 61;
             if (TestSupportSummary() != 0) return 71;
             if (TriageRegressionSelfTest.Run() != 0) return 81;
+            if (DiskPressureRegressionSelfTest.Run() != 0) return 91;
             return 0;
         }
         catch { return 99; }

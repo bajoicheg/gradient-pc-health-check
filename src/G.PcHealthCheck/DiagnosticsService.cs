@@ -134,7 +134,7 @@ public sealed class DiagnosticsService
                 {
                     var busy = ToDouble(item["PercentDiskTime"]);
                     var queue = ToDouble(item["CurrentDiskQueueLength"]);
-                    if (double.IsFinite(busy)) diskBusySamples.Add(Math.Max(0d, busy));
+                    if (double.IsFinite(busy)) diskBusySamples.Add(Math.Clamp(busy, 0d, 100d));
                     if (double.IsFinite(queue)) diskQueueSamples.Add(Math.Max(0d, queue));
                 }
             }
