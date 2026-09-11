@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0 — Common workstation problems
+
+- Added a dedicated window for local network/IP/DNS configuration, printing/Spooler state and Plug-and-Play device errors, accessible from the single EXE menu.
+- Every finding includes evidence, an explicit status and guided resolution; WARN precedes UNKNOWN, INFO and OK consistently in the UI, clipboard, HTML and JSON.
+- Supports IPv6-only and multiple-adapter configurations, distinguishes APIPA/link-local-only configuration and missing DNS, and does not claim resource reachability from configuration alone.
+- Distinguishes missing printer telemetry, unknown Spooler, default-printer offline/error signals and unused/disconnected printers; positive fault observations retain priority over missing data.
+- Retains NULL PnP error codes in the WMI query and treats unavailable presence/error codes as unknown rather than confirmed hardware failure or health.
+- Added repeat/cancel collection, current/previous snapshots, local HTML/JSON export and a copyable Service Desk summary.
+- Added an allow-listed Windows Settings menu and separate confirmation for the existing FlushDns action, gated on usable local IP/DNS configuration.
+- Added 36 diagnostic scenarios, eight priority/unknown-data regressions and presentation/serialization/URI/menu checks.
+- Fixed the ambiguous System.Management/System.IO EnumerationOptions reference detected by Windows CI.
+- Existing Health Score, assessment thresholds, worker, remediation allow-list, IPC, elevation and CI workflows are unchanged.
+- Application version: `0.5.0`; FileVersion: `0.5.0.0`. Details and pilot acceptance: `docs/releases/0.5.0.md`.
+
 ## 0.4.4 — Primary guidance and critical-first support summary
 
 - The triage next step uses the primary finding's recommendation; an unrelated recommended action no longer overrides it.

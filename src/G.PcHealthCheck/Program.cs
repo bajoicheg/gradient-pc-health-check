@@ -9,26 +9,28 @@ internal static class Program
     {
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("ru-RU");
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("ru-RU");
-
         if (args.Any(a => string.Equals(a, "--selftest", StringComparison.OrdinalIgnoreCase)))
         {
-            Environment.Exit(SelfTest.Run());
+            var result = SelfTest.Run();
+            if (result == 0) result = CommonProblemsRegressionSelfTest.Run();
+            if (result == 0) result = CommonProblemsPresentationSelfTest.Run();
+            if (result == 0) result = CommonProblemCommandSelfTest.Run();
+            Environment.Exit(result);
             return;
         }
-
         if (args.Any(a => string.Equals(a, "--bootstrap-worker", StringComparison.OrdinalIgnoreCase)))
         {
             Environment.Exit(RemediationWorker.RunBootstrap(args));
             return;
         }
-
         if (args.Any(a => string.Equals(a, "--worker", StringComparison.OrdinalIgnoreCase)))
         {
             Environment.Exit(RemediationWorker.Run(args));
             return;
         }
-
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        using var main = new MainForm();
+        CommonProblemsMenu.Attach(main);
+        Application.Run(main);
     }
 }
