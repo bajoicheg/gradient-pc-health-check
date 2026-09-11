@@ -1,6 +1,8 @@
 # Supply-chain verification
 
-Gradient PC Health Check 0.3.6 adds cryptographically verifiable provenance for public builds without widening the application's runtime privilege boundary.
+Gradient PC Health Check 0.3.7 provides cryptographically verifiable provenance for public builds without widening the application's runtime privilege boundary.
+
+Version 0.3.6 introduced this pipeline, but its first attestation run stopped before SBOM generation with `NETSDK1100` when the Linux runner restored the Windows-targeting project. Version 0.3.7 fixes that metadata-only restore with `EnableWindowsTargeting=true` and supersedes 0.3.6 for the complete attested release path.
 
 ## What is produced
 
@@ -25,6 +27,8 @@ The attestation job runs only when all of the following are true:
 5. the triggering run reports a syntactically valid 40-character Git SHA.
 
 The job then checks out that exact SHA, downloads artifacts from that exact run ID, and independently verifies the EXE SHA-256 against the checksum produced by the Windows build before generating any attestation.
+
+The Linux attestation runner performs only a dependency-metadata restore with `-p:EnableWindowsTargeting=true` so the SBOM component detector can inspect the Windows-targeting .NET project. It does not build or publish the Windows application. The release binary remains the one built and security-tested by the `Windows EXE` workflow on the Windows runner.
 
 This prevents artifacts from an untrusted fork Pull Request from being promoted into signed public provenance.
 

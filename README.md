@@ -2,13 +2,13 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
 
-Current project version: **0.3.6**. The application is a self-contained single-file `Gradient-PC-Health-Check.exe`.
+Current project version: **0.3.7**. The application is a self-contained single-file `Gradient-PC-Health-Check.exe`.
 
 > **Security / privacy:** never attach an unreviewed `Gradient-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.3.6 does
+## What 0.3.7 does
 
-Runtime diagnostics and remediation behavior are unchanged from 0.3.5. Version 0.3.6 adds public-release supply-chain assurance: SPDX SBOM generation and signed GitHub/Sigstore artifact attestations for the tested EXE and pilot package.
+Runtime diagnostics and remediation behavior are unchanged from 0.3.5. Version 0.3.7 completes the public-release supply-chain assurance introduced in 0.3.6: SPDX SBOM generation and signed GitHub/Sigstore artifact attestations for the tested EXE and pilot package. The 0.3.7 hotfix allows dependency-metadata restore for the Windows-targeting project on the Linux attestation runner without building the application there.
 
 The application:
 
@@ -74,6 +74,7 @@ The same trusted build event also triggers `Supply Chain Attestations`. That wor
 - independently re-validates the source build run and exact commit SHA;
 - downloads the exact EXE and pilot artifacts produced by that build;
 - verifies the EXE SHA-256 again;
+- restores only dependency metadata on Linux with Windows targeting explicitly enabled for component detection;
 - generates an SPDX 2.2 SBOM with the pinned Microsoft SBOM Tool;
 - generates signed GitHub Artifact Attestations using Sigstore for EXE and pilot build provenance;
 - binds the SPDX SBOM to the EXE with a signed SBOM attestation;
@@ -115,4 +116,4 @@ The Gradient name, G-shield artwork and related branding assets are **not** gran
 
 ## Code signing
 
-0.3.6 adds cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
+0.3.7 provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
