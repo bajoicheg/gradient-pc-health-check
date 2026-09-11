@@ -2,18 +2,21 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
 
-Current project version: **0.3.8**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.4.0**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
 > **Security / privacy:** never attach an unreviewed `G-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.3.8 does
+## What 0.4.0 adds
 
-Runtime diagnostics and remediation behavior are unchanged from 0.3.5. Version 0.3.8 completes the public-release supply-chain assurance introduced in 0.3.6: SPDX SBOM generation and signed GitHub/Sigstore artifact attestations for the tested EXE and pilot package. The 0.3.8 hotfix allows dependency-metadata restore for the Windows-targeting project on the Linux attestation runner without building the application there.
+Version 0.4.0 returns focus to the Service Desk product experience while preserving the 0.3.8 security and supply-chain boundary. It makes diagnostic coverage visible in the main dashboard, records scan duration, adds a copy-ready support summary, and removes the form-wide busy cursor that could remain visually stuck over DataGridView regions after asynchronous diagnostics.
 
 The application:
 
 - collects CPU, RAM, logical/physical disk, Windows/build, process, Event Log, startup, security-product, network and Windows Update signals;
 - calculates diagnostic coverage so missing telemetry is not shown as “healthy”;
+- shows diagnostic coverage directly on the dashboard and colors degraded coverage;
+- can copy a concise Service Desk summary to the clipboard;
+- shows elapsed scan time without changing the mouse cursor to a global busy state;
 - samples CPU and disk queue repeatedly and uses the median to reduce transient false positives;
 - groups repeated Windows events by Provider/Event ID;
 - sorts process/event numeric columns using typed values rather than formatted strings;
@@ -63,7 +66,7 @@ Detailed model: [`docs/SECURITY.md`](docs/SECURITY.md).
 - SHA-256 generation;
 - pilot-bundle creation and strict UTF-8 validation.
 
-`main` is protected by an active repository ruleset: changes require a Pull Request, `build` and `analyzer` must pass against the current base branch, deletion and non-fast-forward updates are blocked, and linear history is required.
+`main` is protected by an active repository ruleset: changes require a Pull Request, `build`, `analyzer` and `supply-chain-smoke` must pass against the current base branch, deletion and non-fast-forward updates are blocked, and linear history is required.
 
 ## Release and artifact provenance
 
@@ -116,4 +119,4 @@ The G name, G-shield artwork and related branding assets are **not** granted und
 
 ## Code signing
 
-0.3.8 provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
+0.4.0 provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.

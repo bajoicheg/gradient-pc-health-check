@@ -1,17 +1,16 @@
 # Changelog
 
-## 0.3.8 — rename to G PC Health Check
+## 0.4.0 — Service Desk product UX
 
-Brand-neutral rename baseline before 0.4.0; diagnostic and remediation behavior is unchanged from 0.3.7.
+First product-focused release after the public rename/supply-chain baseline.
 
-- Product name changed to `G PC Health Check`.
-- Executable renamed to `G-PC-Health-Check.exe`.
-- .NET namespace/project path changed from the legacy brand to `G.PcHealthCheck` / `src/G.PcHealthCheck`.
-- Canonical privileged path changed to `%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`.
-- Local report/evidence paths, named-pipe prefix, CI artifacts, pilot bundles, Release assets, SBOM metadata and repository URLs now use `G` / `g`.
-- Current repository name is expected to be `g-pc-health-check`.
-- No runtime diagnostic/remediation logic change.
-- Application version: `0.3.8`.
+- Removed the form-wide `WaitCursor`; progress is communicated through the existing progress bar/status and disabled controls, preventing a sticky busy cursor over DataGridView regions after async diagnostics.
+- Added a visible diagnostic coverage metric to the main dashboard with HIGH/MEDIUM/LOW coloring.
+- Added elapsed scan duration to the completion status.
+- Added `Копировать сводку` for a concise clipboard-ready Service Desk summary with host/user, health score, coverage, key metrics, significant findings and recommended actions.
+- Added a self-test for the support-summary contract.
+- Updated protected-branch documentation to include required `supply-chain-smoke`.
+- Application version: `0.4.0`.
 
 ## 0.3.8 — rename to G PC Health Check
 

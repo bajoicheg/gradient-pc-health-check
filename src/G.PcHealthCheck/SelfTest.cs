@@ -12,6 +12,7 @@ internal static class SelfTest
             if (TestDiffuseEventNoiseDoesNotPenalize() != 0) return 41;
             if (TestRepeatedEventsAreActionable() != 0) return 51;
             if (TestTrustedElevationLocations() != 0) return 61;
+            if (TestSupportSummary() != 0) return 71;
             return 0;
         }
         catch { return 99; }
@@ -128,6 +129,16 @@ internal static class SelfTest
         if (RemediationWorker.IsTrustedElevationLocation(tempCandidate)) return 3;
 
         if (RemediationWorker.RunBootstrap(["--bootstrap-worker"]) != 48) return 4;
+        return 0;
+    }
+
+    private static int TestSupportSummary()
+    {
+        var result = new AssessmentService().Assess(HealthyData());
+        var summary = SupportSummary.Build(result);
+        if (!summary.Contains("Компьютер: TEST", StringComparison.Ordinal)) return 1;
+        if (!summary.Contains("Статус: OK; индекс: 100/100", StringComparison.Ordinal)) return 2;
+        if (!summary.Contains("Покрытие: 100% (HIGH)", StringComparison.Ordinal)) return 3;
         return 0;
     }
 
