@@ -1,0 +1,56 @@
+name: Prepare 0.4.2 disk pressure
+
+on:
+  push:
+    branches: [ feature/0.4.2-disk-pressure ]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 1
+
+      - name: Apply 0.4.2 changes
+        shell: pwsh
+        run: |
+          python .github/scripts/apply-042.py
+          git diff --check
+
+      - name: Validate source model
+        shell: pwsh
+        run: |
+          if (-not (Test-Path src/G.PcHealthCheck/DiskPressureRegressionSelfTest.cs)) { throw 'Disk pressure regression test missing.' }
+          if (Select-String -LiteralPath src/G.PcHealthCheck/G.PcHealthCheck.csproj -Pattern '<Version>0.4.2</Version>' -Quiet) { } else { throw 'Version 0.4.2 not set.' }
+          if (Select-String -LiteralPath src/G.PcHealthCheck/AssessmentService.cs -Pattern 'DiskBusyWarnPercent' -Quiet) { } else { throw 'Combined busy/queue model missing.' }
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: '8.0.425'
+
+      - name: Restore and build
+        shell: pwsh
+        run: |
+          dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj
+          dotnet build src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release --no-restore -warnaserror
+
+      - name: Product self-test
+        shell: pwsh
+        run: dotnet run --project src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release --no-build -- --selftest
+
+      - name: Commit prepared 0.4.2
+        shell: pwsh
+        run: |
+          Remove-Item .github/scripts/apply-042.py,.github/workflows/dev-0.4.2.yml -Force
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m '0.4.2: require combined disk pressure signal'
+          git push origin HEAD:feature/0.4.2-disk-pressure
