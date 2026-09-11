@@ -12,7 +12,9 @@ internal static class Program
         if (args.Any(a => string.Equals(a, "--selftest", StringComparison.OrdinalIgnoreCase)))
         {
             var result = SelfTest.Run();
-            Environment.Exit(result != 0 ? result : CommonProblemsRegressionSelfTest.Run());
+            if (result == 0) result = CommonProblemsRegressionSelfTest.Run();
+            if (result == 0) result = CommonProblemsPresentationSelfTest.Run();
+            Environment.Exit(result);
             return;
         }
         if (args.Any(a => string.Equals(a, "--bootstrap-worker", StringComparison.OrdinalIgnoreCase)))
@@ -26,6 +28,8 @@ internal static class Program
             return;
         }
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        using var main = new MainForm();
+        CommonProblemsMenu.Attach(main);
+        Application.Run(main);
     }
 }
