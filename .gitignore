@@ -1,0 +1,22 @@
+bin/
+obj/
+artifacts/
+*.user
+*.suo
+*.log
+
+# Local secrets / signing material
+.env
+.env.*
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+secrets/
+
+# Diagnostic and E2E evidence can contain workstation/user data
+G-PC-Health-Check-E2E-*.zip
+PCHealth_*.json
+PCHealth_*.html
+PCHealth_*.zip

@@ -1,0 +1,67 @@
+name: Bug report
+description: Report a reproducible application defect without sensitive workstation evidence.
+title: "[Bug] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+
+        **Do not attach raw E2E evidence ZIPs, credentials, usernames, domain names, internal hostnames/IPs, or screenshots containing sensitive corporate data.** For vulnerabilities, use the Security page instead of this public form.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Application version and, if known, commit SHA.
+      placeholder: "0.3.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Diagnostics
+        - Assessment / recommendations
+        - UI / sorting
+        - Reporting
+        - Non-privileged remediation
+        - Administrative remediation
+        - Build / packaging
+        - GitHub Actions / release
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the defect using synthetic or redacted data.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Start ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-data check
+      options:
+        - label: I have removed credentials, usernames, domain/host names, internal IPs/URLs, and raw E2E evidence from this report.
+          required: true
+        - label: This is not a security vulnerability. If it is, I will use the Security reporting path instead.
+          required: true
