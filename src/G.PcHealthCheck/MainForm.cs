@@ -20,6 +20,8 @@ public sealed class MainForm : Form
     private readonly Label _disk = new();
     private readonly Label _uptime = new();
     private readonly Label _coverage = new();
+    private readonly Label _triageTitle = new();
+    private readonly Label _triageDetail = new();
     private readonly Label _status = new();
     private readonly ProgressBar _progress = new();
     private readonly Button _scan = new();
@@ -125,6 +127,26 @@ public sealed class MainForm : Form
     private TabPage RecommendationsTab()
     {
         var page = Page("Рекомендации");
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var triage = Card();
+        triage.Margin = new Padding(0, 0, 0, 8);
+        _triageTitle.Font = new Font("Segoe UI Semibold", 11F);
+        _triageTitle.ForeColor = Navy;
+        _triageTitle.AutoSize = true;
+        _triageTitle.Location = new Point(14, 12);
+        triage.Controls.Add(_triageTitle);
+        _triageDetail.ForeColor = Muted;
+        _triageDetail.AutoEllipsis = true;
+        _triageDetail.Location = new Point(14, 39);
+        _triageDetail.Size = new Size(900, 22);
+        _triageDetail.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+        triage.Controls.Add(_triageDetail);
+        triage.Resize += (_, _) => _triageDetail.Width = Math.Max(100, triage.ClientSize.Width - 28);
+        layout.Controls.Add(triage, 0, 0);
+
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 300 };
         ConfigureGrid(_actions, false);
         _actions.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
@@ -157,7 +179,8 @@ public sealed class MainForm : Form
         _findings.Columns[0].Width = 70; _findings.Columns[1].Width = 105; _findings.Columns[2].Width = 250; _findings.Columns[3].Width = 150; _findings.Columns[4].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         foreach (DataGridViewColumn c in _findings.Columns) c.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         split.Panel2.Controls.Add(_findings);
-        page.Controls.Add(split);
+        layout.Controls.Add(split, 0, 1);
+        page.Controls.Add(layout);
         return page;
     }
 
@@ -299,6 +322,11 @@ public sealed class MainForm : Form
         _uptime.Text = $"{d.System.UptimeDays:0.#} дн.";
         _coverage.Text = $"{scan.Assessment.CoveragePercent}%";
         _coverage.ForeColor = scan.Assessment.CoverageStatus == "HIGH" ? Ok : scan.Assessment.CoverageStatus == "MEDIUM" ? Warn : Crit;
+        var triage = TriageSummary.Build(scan);
+        _triageTitle.Text = triage.Title;
+        _triageTitle.ForeColor = scan.Assessment.Status == "OK" ? Ok : scan.Assessment.Status == "WARN" ? Warn : Crit;
+        _triageDetail.Text = triage.Detail;
+        _tabs.TabPages[0].Text = triage.SignificantCount > 0 ? $"Рекомендации ({triage.SignificantCount})" : "Рекомендации";
 
         _actions.Rows.Clear();
         foreach (var a in scan.Actions)
@@ -323,22 +351,28 @@ public sealed class MainForm : Form
         foreach (var f in scan.Assessment.Findings.OrderBy(x => x.Severity == "CRIT" ? 0 : x.Severity == "WARN" ? 1 : 2))
         {
             var i = _findings.Rows.Add(f.Severity, f.Category, f.Title, f.Value, f.Recommendation);
-            _findings.Rows[i].Cells[0].Style.ForeColor = f.Severity == "CRIT" ? Crit : f.Severity == "WARN" ? Warn : Ok;
-            _findings.Rows[i].Cells[0].Style.Font = new Font(Font, FontStyle.Bold);
+            var row = _findings.Rows[i];
+            row.Cells[0].Style.ForeColor = f.Severity == "CRIT" ? Crit : f.Severity == "WARN" ? Warn : Ok;
+            row.Cells[0].Style.Font = new Font(Font, FontStyle.Bold);
+            if (f.Severity == "CRIT") row.DefaultCellStyle.BackColor = Color.FromArgb(255, 242, 242);
+            else if (f.Severity == "WARN") row.DefaultCellStyle.BackColor = Color.FromArgb(255, 249, 235);
         }
 
         FillProcesses(_topCpu, d.TopCpu); FillProcesses(_topRam, d.TopMemory); FillProcesses(_topIo, d.TopIo);
         _events.Rows.Clear();
         foreach (var e in d.Events.Top) _events.Rows.Add(e.Log, e.Provider, e.EventId, e.Count, e.LastSeen);
-        PopulateSystem(d);
+        PopulateSystem(scan);
     }
 
-    private void PopulateSystem(DiagnosticData d)
+    private void PopulateSystem(ScanResult scan)
     {
+        var d = scan.Data;
         _system.Rows.Clear(); void Add(string k, string v) => _system.Rows.Add(k, v);
         Add("Компьютер", d.System.ComputerName); Add("Пользователь", d.System.UserName); Add("Производитель / модель", (d.System.Manufacturer + " " + d.System.Model).Trim());
         Add("Windows", $"{d.System.OS} {d.System.OSVersion} build {d.System.BuildNumber}"); Add("CPU", d.System.Cpu); Add("RAM", $"{d.System.TotalMemoryGB:0.#} GB");
         Add("Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Add("Права процесса", d.System.IsAdministrator ? "Administrator" : "Standard user");
+        Add("Покрытие диагностики", $"{scan.Assessment.CoveragePercent}% ({scan.Assessment.CoverageStatus})");
+        Add("Недоступные сигналы", scan.Assessment.MissingSignals.Count == 0 ? "Нет" : string.Join("; ", scan.Assessment.MissingSignals));
         Add("Pending reboot", d.PendingReboot.Pending ? "Да — " + string.Join("; ", d.PendingReboot.Reasons) : "Нет"); Add("Windows Update", $"wuauserv={d.Updates.Wuauserv}; BITS={d.Updates.Bits}");
         Add("Защита", d.SecurityProducts.Count == 0 ? "Не удалось определить" : string.Join("; ", d.SecurityProducts.Select(x => $"{x.Name} [{x.State}]")));
         Add("Физические диски", d.PhysicalDisks.Count == 0 ? "Не удалось определить" : string.Join("; ", d.PhysicalDisks.Select(x => $"{x.Name}: {x.HealthStatus}")));

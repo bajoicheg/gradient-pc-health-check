@@ -9,7 +9,8 @@ internal static class SupportSummary
         ArgumentNullException.ThrowIfNull(scan);
         var d = scan.Data;
         var a = scan.Assessment;
-        var systemDrive = d.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:\\", StringComparison.OrdinalIgnoreCase));
+        var triage = TriageSummary.Build(scan);
+        var systemDrive = d.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:", StringComparison.OrdinalIgnoreCase));
         var sb = new StringBuilder();
 
         sb.AppendLine("G PC Health Check");
@@ -17,6 +18,8 @@ internal static class SupportSummary
         sb.AppendLine($"Пользователь: {d.System.UserName}");
         sb.AppendLine($"Статус: {a.Status}; индекс: {a.Score}/100");
         sb.AppendLine($"Покрытие: {a.CoveragePercent}% ({a.CoverageStatus})");
+        sb.AppendLine($"Triage: {triage.Title}");
+        sb.AppendLine($"Следующий шаг: {triage.NextAction}");
         sb.AppendLine($"CPU: {Format(d.Performance.CpuPercent, "%")}; RAM: {Format(d.Performance.MemoryUsedPercent, "%")}; C: {(systemDrive is null ? "—" : $"{systemDrive.FreeGB:0.#} GB свободно")}; uptime: {d.System.UptimeDays:0.#} дн.");
 
         if (a.MissingSignals.Count > 0)

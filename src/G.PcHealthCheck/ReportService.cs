@@ -74,6 +74,7 @@ public sealed class ReportService
         var sb = Begin("G PC Health Check — " + d.System.ComputerName);
         Header(sb, "Диагностика рабочего места Service Desk", d.System.CollectedAt);
         Hero(sb, scan.Assessment.Score, scan.Assessment.Status, d.System.ComputerName + " · " + d.System.UserName + " · " + d.System.Model);
+        Triage(sb, scan);
         Metrics(sb, scan);
         Findings(sb, scan.Assessment.Findings, "Выводы");
         sb.Append("<section><h2>Действия Service Desk</h2><table><thead><tr><th>Тип</th><th>Действие</th><th>Причина</th><th>Авто</th><th>Admin</th><th>Риск</th></tr></thead><tbody>");
@@ -82,7 +83,7 @@ public sealed class ReportService
         sb.Append("</tbody></table></section>");
         Processes(sb, d);
         Events(sb, d);
-        SystemBlock(sb, d);
+        SystemBlock(sb, scan);
         return End(sb);
     }
 
@@ -91,6 +92,7 @@ public sealed class ReportService
         var sb = Begin("G PC Health Check — автопроверка");
         Header(sb, "Автопроверка после remediation", DateTime.Now);
         Hero(sb, v.After.Assessment.Score, v.After.Assessment.Status, $"{v.After.Data.System.ComputerName} · было {v.Before.Assessment.Score}/100 → стало {v.After.Assessment.Score}/100");
+        Triage(sb, v.After);
         sb.Append("<section><h2>До / после</h2><table><thead><tr><th>Показатель</th><th>До</th><th>После</th><th>Изменение</th></tr></thead><tbody>");
         foreach (var r in CompareRows(v.Before, v.After))
             sb.Append("<tr><td>").Append(H(r.Name)).Append("</td><td>").Append(H(r.Before)).Append("</td><td>").Append(H(r.After)).Append("</td><td>").Append(H(r.Delta)).Append("</td></tr>");
@@ -107,7 +109,7 @@ public sealed class ReportService
     {
         var sb = new StringBuilder();
         sb.Append("<!doctype html><html lang='ru'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>").Append(H(title)).Append("</title><style>");
-        sb.Append("body{margin:0;background:#f4f7fa;color:#172432;font:14px/1.45 'Segoe UI',Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;background:white;border-bottom:1px solid #dce5ed}.brand{display:flex;gap:14px;align-items:center}.logo{width:52px;height:58px}main{max-width:1480px;margin:auto;padding:24px}section{background:white;border:1px solid #dce5ed;border-radius:14px;padding:20px;margin:0 0 18px}.hero{display:flex;gap:22px;align-items:center}.score{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;border:9px solid}.score.ok{color:#177a4b;border-color:#bfe5d2}.score.warn{color:#a56a00;border-color:#f4d99c}.score.crit{color:#b53636;border-color:#f0b8b8}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;background:none;border:0;padding:0}.card{background:white;border:1px solid #dce5ed;border-radius:14px;padding:18px;display:flex;flex-direction:column}.card strong{font-size:27px;margin:5px 0}.muted,.stamp,.card small{color:#687a8b}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #dce5ed;padding:9px 10px;text-align:left;vertical-align:top}th{color:#4b6174;background:#f8fafc}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700}.pill.ok{background:#dff4e9;color:#177a4b}.pill.warn{background:#fff0c9;color:#a56a00}.pill.crit{background:#ffe1e1;color:#b53636}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}@media(max-width:900px){.cards,.grid3{grid-template-columns:1fr 1fr}}@media(max-width:600px){.cards,.grid3{grid-template-columns:1fr}main{padding:10px}}");
+        sb.Append("body{margin:0;background:#f4f7fa;color:#172432;font:14px/1.45 'Segoe UI',Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;background:white;border-bottom:1px solid #dce5ed}.brand{display:flex;gap:14px;align-items:center}.logo{width:52px;height:58px}main{max-width:1480px;margin:auto;padding:24px}section{background:white;border:1px solid #dce5ed;border-radius:14px;padding:20px;margin:0 0 18px}.hero{display:flex;gap:22px;align-items:center}.score{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;border:9px solid}.score.ok{color:#177a4b;border-color:#bfe5d2}.score.warn{color:#a56a00;border-color:#f4d99c}.score.crit{color:#b53636;border-color:#f0b8b8}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;background:none;border:0;padding:0}.card{background:white;border:1px solid #dce5ed;border-radius:14px;padding:18px;display:flex;flex-direction:column}.card strong{font-size:27px;margin:5px 0}.muted,.stamp,.card small{color:#687a8b}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #dce5ed;padding:9px 10px;text-align:left;vertical-align:top}th{color:#4b6174;background:#f8fafc}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700}.pill.ok{background:#dff4e9;color:#177a4b}.pill.warn{background:#fff0c9;color:#a56a00}.pill.crit{background:#ffe1e1;color:#b53636}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}@media(max-width:900px){.cards,.grid3{grid-template-columns:1fr 1fr}}@media(max-width:600px){.cards,.grid3{grid-template-columns:1fr}main{padding:10px}}");
         sb.Append("</style></head><body>");
         return sb;
     }
@@ -125,10 +127,17 @@ public sealed class ReportService
         sb.Append("<section class='hero'><div class='score ").Append(cls).Append("'>").Append(score).Append("<span style='font-size:12px'>/100</span></div><div><h2>").Append(H(StatusText(status))).Append("</h2><p>").Append(H(detail)).Append("</p><p class='muted'>Индекс — эвристика первичной диагностики, а не доказательство исправности.</p></div></section>");
     }
 
+    private static void Triage(StringBuilder sb, ScanResult scan)
+    {
+        var triage = TriageSummary.Build(scan);
+        sb.Append("<section><h2>Triage</h2><p><b>").Append(H(triage.Title)).Append("</b></p><p>").Append(H(triage.Detail)).Append("</p></section>");
+    }
+
     private static void Metrics(StringBuilder sb, ScanResult scan)
     {
         var d = scan.Data; var disk = SystemDisk(d);
         sb.Append("<section class='cards'>");
+        Card(sb, "Покрытие", $"{scan.Assessment.CoveragePercent}%", scan.Assessment.CoverageStatus);
         Card(sb, "CPU", F(d.Performance.CpuPercent, "%"), "текущая загрузка");
         Card(sb, "RAM", F(d.Performance.MemoryUsedPercent, "%"), "использовано");
         Card(sb, "Системный диск", disk is null ? "—" : $"{disk.FreeGB:0.#} GB", "свободно");
@@ -165,8 +174,9 @@ public sealed class ReportService
         sb.Append("</tbody></table></section>");
     }
 
-    private static void SystemBlock(StringBuilder sb, DiagnosticData d)
+    private static void SystemBlock(StringBuilder sb, ScanResult scan)
     {
+        var d = scan.Data;
         sb.Append("<section><h2>Система</h2><table><tbody>");
         Row(sb, "ПК", d.System.ComputerName); Row(sb, "Пользователь", d.System.UserName); Row(sb, "Производитель / модель", d.System.Manufacturer + " " + d.System.Model); Row(sb, "Windows", d.System.OS + " " + d.System.OSVersion + " build " + d.System.BuildNumber); Row(sb, "CPU", d.System.Cpu); Row(sb, "RAM", $"{d.System.TotalMemoryGB:0.#} GB"); Row(sb, "Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Row(sb, "Права процесса", d.System.IsAdministrator ? "Administrator" : "Standard user"); Row(sb, "Windows Update", $"wuauserv={d.Updates.Wuauserv}; BITS={d.Updates.Bits}"); Row(sb, "Антивирус / EDR", d.SecurityProducts.Count == 0 ? "Не удалось определить" : string.Join("; ", d.SecurityProducts.Select(x => x.Name + " [" + x.State + "]")));
         sb.Append("</tbody></table>");
