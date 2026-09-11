@@ -2,9 +2,15 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and controlled remediation.
 
-Current project version: **0.5.0**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.5.1**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
 > **Security / privacy:** never attach unreviewed diagnostic reports to a public Issue or Pull Request. Evidence may include workstation names, usernames, domain information, hardware/OS details, device names and network addresses. See [`SECURITY.md`](SECURITY.md).
+
+## What 0.5.1 fixes
+
+Assessment, the dashboard, clipboard and HTML/before-after reports now use one system-volume selector. They resolve the local Windows volume instead of assuming C:, normalize equivalent drive-root forms, and never substitute another disk when the expected volume is absent. Invalid or ambiguous disk measurements reduce coverage without fabricating a confirmed fault or preselecting cleanup; a measured zero free space remains critical. The System tab and report identify the Windows volume explicitly.
+
+The fix includes 24 synthetic regression scenarios. It applies to local workstation diagnostics, not offline import/reanalysis of another computer's report. Collector, worker/elevation boundaries, dependencies and workflow permissions are unchanged. Details and pilot checks: [`docs/releases/0.5.1.md`](docs/releases/0.5.1.md).
 
 ## What 0.5.0 adds
 
