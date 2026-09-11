@@ -66,7 +66,11 @@ internal sealed class CommonProblemsForm : Form
             if (Selected() is not { } row) return;
             TryUi(() => CommonProblemTools.Open(row.Topic));
         };
-        _copy.Click += (_, _) => { if (_current is not null) TryUi(() => Clipboard.SetText(CommonProblemsReport.Summary(_current, _previous, _lastCommand))); };
+        _copy.Click += (_, _) =>
+        {
+            var current = _current;
+            if (current is not null) TryUi(() => Clipboard.SetText(CommonProblemsReport.Summary(current, _previous, _lastCommand)));
+        };
         _export.Click += (_, _) => Export();
         _dns.Click += async (_, _) => await FlushDnsAsync();
         Shown += async (_, _) => await ScanAsync();
@@ -94,13 +98,11 @@ internal sealed class CommonProblemsForm : Form
             if (IsDisposed || cancellation.IsCancellationRequested) return;
             _previous = _current; _current = data;
             _grid.DataSource = CommonProblemsAssessment.Assess(data);
-            _status.Text = $"Снимок {data.CollectedAt:HH:mm:ss}. Повторная проверка не заменяет подтверждение симптома пользователем.";
-            if (_lastCommand is not null)
-                _status.Text += " Последняя команда: " + string.Join("; ", _lastCommand.Actions.Select(x => $"{x.Id}: {(x.Success ? "код выполнения успешный" : "ошибка")}"));
+            _status.Text = $"Снимок {data.CollectedAt:HH:mm:ss}. Повторная проверка не заменяет подтверждение симптома пользователем." + CommandStatus();
             ShowDetail();
         }
-        catch (OperationCanceledException) { if (!IsDisposed) _status.Text = "Сбор отменён. Предыдущие результаты не заменены."; }
-        catch (Exception ex) { if (!IsDisposed) _status.Text = "Не удалось завершить сбор: " + ex.Message; }
+        catch (OperationCanceledException) { if (!IsDisposed) _status.Text = "Сбор отменён. Предыдущие результаты не заменены." + CommandStatus(); }
+        catch (Exception ex) { if (!IsDisposed) _status.Text = "Не удалось завершить сбор: " + ex.Message + CommandStatus(); }
         finally
         {
             cancellation.Dispose(); _scanCancellation = null; _busy = false;
@@ -110,21 +112,32 @@ internal sealed class CommonProblemsForm : Form
 
     private async Task FlushDnsAsync()
     {
-        if (_busy || _current is null || !CommonProblemsAssessment.CanOfferDnsFlush(_current)) return;
+        var current = _current;
+        if (_busy || current is null || !CommonProblemsAssessment.CanOfferDnsFlush(current)) return;
         if (MessageBox.Show(this,
             "Используйте только при симптомах разрешения имён. Будет очищен локальный DNS-кэш; DNS-серверы, IP, proxy и VPN не меняются. Это не исправляет DHCP, отсутствие DNS или недоступность сервера. После команды будет повторно прочитана конфигурация, а обращение к проблемному ресурсу необходимо проверить отдельно. Продолжить?",
             "Подтвердите очистку DNS-кэша", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes) return;
-        _busy = true; _commandRunning = true; UpdateButtons();
+        _busy = true; _commandRunning = true; _lastCommand = null; UpdateButtons();
+        var startedAt = DateTime.Now;
         try
         {
             _lastCommand = await RemediationWorker.ExecuteFromGuiAsync(
                 [new ActionRecommendation { Id = "FlushDns", CanAutomate = true, RequiresAdmin = false }], 3, Progress());
         }
-        catch (Exception ex) { _status.Text = "Команда не завершена: " + ex.Message; }
-        finally { _busy = false; _commandRunning = false; if (!IsDisposed) UpdateButtons(); }
+        catch (Exception ex)
+        {
+            _lastCommand = CommonProblemCommandResult.UnconfirmedDnsFlush(startedAt, DiagnosticsService.IsAdministrator(), ex);
+        }
+        finally
+        {
+            _busy = false; _commandRunning = false;
+            if (!IsDisposed) { _status.Text = CommandStatus(); UpdateButtons(); }
+        }
         if (!IsDisposed) await ScanAsync();
     }
 
+    private string CommandStatus() => _lastCommand is null ? "" : " Последняя команда: " + string.Join("; ", _lastCommand.Actions.Select(x =>
+        $"{x.Id}: {(x.Success ? "код выполнения успешный" : "ошибка / результат не подтверждён")}; {x.Message}"));
     private IProgress<string> Progress() => new Progress<string>(message => { if (!IsDisposed) _status.Text = message; });
     private CommonProblemFinding? Selected() => _grid.CurrentRow?.DataBoundItem as CommonProblemFinding;
     private void ShowDetail()
@@ -134,7 +147,8 @@ internal sealed class CommonProblemsForm : Form
     }
     private void UpdateButtons()
     {
-        _scan.Enabled = !_busy; _cancel.Enabled = _busy && !_commandRunning && _scanCancellation is not null;
+        _scan.Enabled = !_busy;
+        _cancel.Enabled = _busy && !_commandRunning && _scanCancellation is { IsCancellationRequested: false };
         _copy.Enabled = _export.Enabled = !_busy && _current is not null;
         _settings.Enabled = !_busy && Selected() is { } row && CommonProblemTools.UriForTopic(row.Topic) is not null;
         _dns.Enabled = !_busy && _current is not null && CommonProblemsAssessment.CanOfferDnsFlush(_current);
@@ -142,14 +156,15 @@ internal sealed class CommonProblemsForm : Form
     }
     private void Export()
     {
-        if (_current is null || _busy) return;
+        var current = _current;
+        if (current is null || _busy) return;
         using var dialog = new FolderBrowserDialog { Description = "Выберите локальную папку. Отчёты содержат имена устройств/IP; не публикуйте их без проверки.", UseDescriptionForTitle = true };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
         TryUi(() =>
         {
             var stem = Path.Combine(dialog.SelectedPath, $"CommonProblems_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}");
-            WriteNew(stem + ".json", CommonProblemsReport.Json(_current, _previous, _lastCommand));
-            WriteNew(stem + ".html", CommonProblemsReport.Html(_current, _previous, _lastCommand));
+            WriteNew(stem + ".json", CommonProblemsReport.Json(current, _previous, _lastCommand));
+            WriteNew(stem + ".html", CommonProblemsReport.Html(current, _previous, _lastCommand));
             _status.Text = "Сохранены: " + stem + ".html и .json";
         });
     }

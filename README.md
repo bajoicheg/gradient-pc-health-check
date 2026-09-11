@@ -2,25 +2,36 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and controlled remediation.
 
-Current project version: **0.4.4**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.5.0**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
-> **Security / privacy:** never attach an unreviewed `G-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. Evidence may include workstation names, usernames, domain information, hardware/OS details and diagnostic reports. See [`SECURITY.md`](SECURITY.md).
+> **Security / privacy:** never attach unreviewed diagnostic reports to a public Issue or Pull Request. Evidence may include workstation names, usernames, domain information, hardware/OS details, device names and network addresses. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.4.4 adds
+## What 0.5.0 adds
 
-The next Service Desk step now comes from the primary finding itself. An action recommended for a secondary problem can no longer replace it: low-space Temp cleanup must not hide the guidance to investigate a failing physical disk and check backups. Blank primary guidance falls back to manual investigation before changes, not an unrelated action.
+The menu **Типовые проблемы: сеть, печать, устройства** opens an additional diagnostic window in the same EXE:
 
-Clipboard observations use the same stable critical-first, penalty-second ordering as the triage card. The eight-observation limit is applied after prioritization; longer lists state the number omitted and point to the full HTML/JSON report. Presentation does not change scores, findings or selected actions.
+- local network/IP/DNS configuration checks, including IPv6-only and multiple-NIC cases;
+- installed printer/default/offline/driver-reported state and Print Spooler status;
+- present Plug-and-Play device error codes, distinguishing disabled/disconnected devices from actionable faults;
+- explicit `UNKNOWN` when a collector or device state is unavailable;
+- evidence and guided resolution steps, fixed Windows Settings shortcuts, scan/cancel, clipboard summary and local HTML/JSON exports with previous/current snapshots;
+- an optional, separately confirmed DNS-cache flush that reuses the existing allow-listed action, followed by a configuration rescan. It is not offered when no usable IP or configured DNS is available.
 
-The release adds 19 synthetic regression scenarios. Details and pilot checks: [`docs/releases/0.4.4.md`](docs/releases/0.4.4.md).
+These additional results do not silently change the existing Health Score/Coverage model. IP/DNS configuration does not prove resource reachability; a printer driver's status does not prove successful printing. `INFO` is contextual evidence, not a healthy verdict. A successful command or a repeated scan does not prove that the user's symptom is resolved.
+
+No automatic network/Winsock reset, DHCP release, DNS/proxy/VPN changes, print-job deletion, Spooler restart, driver installation or device enabling is added. Existing worker/elevation boundaries and dependencies are unchanged.
+
+The practical 12-family backlog, technical sources and automation boundaries are documented in [`docs/COMMON-PROBLEMS.md`](docs/COMMON-PROBLEMS.md). This is a product-priority catalogue, not a measured incident-frequency ranking. Version notes and pilot checks: [`docs/releases/0.5.0.md`](docs/releases/0.5.0.md).
 
 ## Diagnostic capabilities
 
-The application collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security products, network and Windows Update signals. CPU and disk samples use short-series medians to reduce transient false positives. Disk-pressure findings require both elevated busy percentage and queue depth; repeated events are grouped by Provider/Event ID.
+The main window collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security products, network and Windows Update signals. CPU and disk samples use short-series medians to reduce transient false positives. Disk-pressure findings require both elevated busy percentage and queue depth; repeated events are grouped by Provider/Event ID.
 
 The dashboard displays score, diagnostic coverage, significant findings and the next Service Desk step. Missing signals appear in the System view, clipboard summary and reports. Process/event columns sort by typed numeric values. Scanning shows progress and elapsed time without a global busy cursor. HTML/JSON reports support before/after comparison.
 
-Since 0.4.3, every missing weighted diagnostic signal produces a data warning even if coverage is still in the numeric HIGH band. Missing data does not subtract score points; confirmed CRIT findings retain priority. Physical-health coverage requires a known status for every discovered disk. An unknown disk status is missing data, not proof of failure. Unmeasured system-disk space is explicitly identified in the optional cleanup recommendation.
+Since 0.4.3, every missing weighted diagnostic signal produces a data warning even if coverage remains in the numeric HIGH band. Missing data does not subtract score points; confirmed CRIT findings retain priority. Physical-health coverage requires known status for every discovered disk; unknown health is not proof of failure. Unmeasured system-disk space is explicitly identified.
+
+Since 0.4.4, the next step comes from the primary finding itself, never an unrelated action for a secondary issue. Clipboard observations use the same critical-first/penalty-second ordering before truncation and state the omitted count. Presentation does not change scores or selected actions.
 
 The score is not a probability of health. See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) and [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md).
 
@@ -50,7 +61,7 @@ The supply-chain workflow generates an SPDX 2.2 SBOM using the pinned Microsoft 
 gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
-Pull-request builds are not published releases and do not receive main-release attestations. A CI success is not a substitute for Windows 11 workstation GUI/UAC/remediation E2E.
+Pull-request builds are not published releases and do not receive main-release attestations. A CI success is not a substitute for managed Windows 11 workstation GUI/UAC/remediation E2E. WMI cancellation is cooperative; per-operation timeouts cannot guarantee that every third-party provider returns promptly.
 
 ## Building locally
 

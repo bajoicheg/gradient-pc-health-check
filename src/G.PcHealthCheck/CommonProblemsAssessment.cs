@@ -8,7 +8,9 @@ internal static class CommonProblemsAssessment
     public static List<CommonProblemFinding> Assess(CommonProblemSnapshot data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        return [Network(data), Printing(data), Devices(data)];
+        // One stable, non-mutating attention order for the UI, clipboard and reports.
+        return new[] { Network(data), Printing(data), Devices(data) }
+            .OrderBy(x => x.Status switch { "WARN" => 0, "UNKNOWN" => 1, "INFO" => 2, _ => 3 }).ToList();
     }
 
     public static bool CanOfferDnsFlush(CommonProblemSnapshot data)
@@ -56,11 +58,13 @@ internal static class CommonProblemsAssessment
         if (d.SpoolerState.Equals("Stopped", StringComparison.OrdinalIgnoreCase))
             return Row(id, topic, "WARN", "Служба печати остановлена при наличии принтеров", evidence, resolution);
         var primary = d.Printers.FirstOrDefault(x => x.IsDefault);
+        if (primary is not null && (primary.WorkOffline == true || primary.PrinterStatus is 6 or 7 || primary.ErrorState is >= 3))
+            return Row(id, topic, "WARN", "Принтер по умолчанию сообщает ограничение печати", evidence, resolution);
+        if (!d.SpoolerState.Equals("Running", StringComparison.OrdinalIgnoreCase))
+            return Row(id, topic, "UNKNOWN", "Готовность службы печати не подтверждена", evidence, resolution);
         if (primary is null)
             return Row(id, topic, "INFO", "Проверьте принтер, выбранный в приложении", evidence, resolution);
-        if (primary.WorkOffline == true || primary.PrinterStatus is 6 or 7 || primary.ErrorState is >= 3)
-            return Row(id, topic, "WARN", "Принтер по умолчанию сообщает ограничение печати", evidence, resolution);
-        if (primary.PrinterStatus is null or 1 or 2 && primary.ErrorState is null or 0 or 1)
+        if ((primary.PrinterStatus is null or 1 or 2) && (primary.ErrorState is null or 0 or 1))
             return Row(id, topic, "UNKNOWN", "Драйвер не сообщил достоверное состояние принтера", evidence, resolution);
         return Row(id, topic, "INFO", "Состояние принтера получено от драйвера", evidence, resolution);
     }

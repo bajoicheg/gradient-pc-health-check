@@ -14,6 +14,7 @@ internal static class Program
             var result = SelfTest.Run();
             if (result == 0) result = CommonProblemsRegressionSelfTest.Run();
             if (result == 0) result = CommonProblemsPresentationSelfTest.Run();
+            if (result == 0) result = CommonProblemCommandSelfTest.Run();
             Environment.Exit(result);
             return;
         }
