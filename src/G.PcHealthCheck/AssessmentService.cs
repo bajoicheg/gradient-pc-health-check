@@ -67,7 +67,8 @@ public sealed class AssessmentService
             Add("WARN", "Автозагрузка", "Много элементов автозагрузки", data.StartupItems.Count.ToString(), "Не отключайте автоматически: проверьте назначение и владельца ПО.", 3);
 
         var coverage = CalculateCoverage(data);
-        if (coverage.Percent < Thresholds.CoverageHighPercent || data.CollectionWarnings.Count > 0)
+        // HIGH is a numeric coverage band, not proof that every required signal is present.
+        if (coverage.Missing.Count > 0 || data.CollectionWarnings.Count > 0)
         {
             var missingText = coverage.Missing.Count == 0 ? "ключевые сигналы собраны" : string.Join("; ", coverage.Missing);
             var warningsText = data.CollectionWarnings.Count == 0 ? "" : $" Ошибок/предупреждений сбора: {data.CollectionWarnings.Count}.";
@@ -115,7 +116,9 @@ public sealed class AssessmentService
             Title = "Очистить старые временные файлы пользователя",
             Reason = tempCleanupRecommended
                 ? $"На системном диске свободно {systemDrive!.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%). Удаляются только обычные файлы из Temp текущего пользователя старше {Thresholds.TempOlderThanDays} дней; reparse points и Prefetch не затрагиваются."
-                : $"Свободного места достаточно, поэтому очистка не рекомендуется автоматически. Инженер может запустить её вручную: удаляются только обычные файлы из Temp текущего пользователя старше {Thresholds.TempOlderThanDays} дней; reparse points и Prefetch не затрагиваются.",
+                : systemDrive is null
+                    ? $"Свободное место на системном диске не измерено, поэтому очистка не рекомендуется автоматически. Сначала повторите диагностику. При ручном запуске удаляются только обычные файлы из Temp текущего пользователя старше {Thresholds.TempOlderThanDays} дней; reparse points и Prefetch не затрагиваются."
+                    : $"Свободного места достаточно, поэтому очистка не рекомендуется автоматически. Инженер может запустить её вручную: удаляются только обычные файлы из Temp текущего пользователя старше {Thresholds.TempOlderThanDays} дней; reparse points и Prefetch не затрагиваются.",
             CanAutomate = true,
             RequiresAdmin = false,
             Preselected = tempCleanupRecommended,
@@ -186,7 +189,8 @@ public sealed class AssessmentService
         Signal(data.Performance.MemoryAvailablePercent.HasValue, 15, "RAM");
         Signal(SystemDrive(data) is { SizeGB: > 0 }, 20, "системный диск");
         Signal(data.Performance.DiskQueueLength.HasValue && data.Performance.DiskBusyPercent.HasValue, 10, "нагрузка диска (busy + queue)");
-        Signal(data.PhysicalDisks.Any(x => !string.IsNullOrWhiteSpace(x.HealthStatus) && !x.HealthStatus.Equals("Unknown", StringComparison.OrdinalIgnoreCase)), 15, "health физического диска");
+        // One known disk cannot stand in for another disk whose health is unavailable.
+        Signal(data.PhysicalDisks.Count > 0 && data.PhysicalDisks.All(x => !string.IsNullOrWhiteSpace(x.HealthStatus) && !x.HealthStatus.Equals("Unknown", StringComparison.OrdinalIgnoreCase)), 15, "health физического диска");
         Signal(!string.IsNullOrWhiteSpace(data.System.OS) && !string.IsNullOrWhiteSpace(data.System.BuildNumber), 10, "Windows/build");
         Signal(data.TopCpu.Count > 0 || data.TopMemory.Count > 0 || data.TopIo.Count > 0, 10, "TOP процессов");
         Signal(data.SecurityProducts.Count > 0, 5, "антивирус/EDR");
