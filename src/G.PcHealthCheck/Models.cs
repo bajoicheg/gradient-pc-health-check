@@ -14,6 +14,8 @@ public sealed class Thresholds
     public double SystemDiskCriticalFreeGB { get; init; } = 10;
     public double DiskQueueWarn { get; init; } = 2;
     public double DiskQueueCritical { get; init; } = 5;
+    public double DiskBusyWarnPercent { get; init; } = 80;
+    public double DiskBusyCriticalPercent { get; init; } = 95;
     public double UptimeWarnDays { get; init; } = 14;
     public double UptimeCriticalDays { get; init; } = 30;
     public int RecentErrorWarnCount { get; init; } = 20;

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.2 — Disk-pressure confidence
+
+- Disk queue depth no longer produces WARN/CRIT on its own.
+- Disk-pressure findings now require both elevated median queue depth and elevated median disk busy percentage.
+- Added `DiskBusyWarnPercent` (80%) and `DiskBusyCriticalPercent` (95%) alongside existing queue thresholds.
+- `InspectIo` is suggested only for the combined busy+queue signal.
+- Diagnostic coverage now requires both disk busy and queue telemetry for the disk-load signal.
+- Clamps sampled `% Disk Time` to 0–100 before taking the median.
+- Clipboard and before/after HTML output now expose both disk busy and queue values.
+- Added regression tests for queue-only false positives, WARN/CRIT combined pressure and incomplete disk telemetry.
+- Application version: `0.4.2`.
+
 ## 0.4.1 — Service Desk triage clarity
 
 - Added a dedicated triage card above recommendations: primary finding, CRIT/WARN counts, diagnostic coverage and the next Service Desk step.

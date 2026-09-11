@@ -2,13 +2,13 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
 
-Current project version: **0.4.1**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.4.2**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
 > **Security / privacy:** never attach an unreviewed `G-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.4.1 adds
+## What 0.4.2 adds
 
-Version 0.4.1 adds an explicit Service Desk triage layer on top of the existing health assessment. The UI identifies the highest-priority finding, counts CRIT/WARN observations, proposes the next step, exposes missing diagnostic signals in the System view, and carries the same triage context into clipboard and HTML reports.
+Version 0.4.2 improves diagnostic confidence for disk bottlenecks. A high disk queue no longer creates WARN/CRIT by itself: the assessment now requires sustained queue pressure together with high median disk busy percentage, and incomplete busy/queue telemetry reduces diagnostic coverage instead of being treated as evidence of a bottleneck.
 
 The application:
 
@@ -19,7 +19,8 @@ The application:
 - exposes missing diagnostic signals in the System view and report outputs;
 - can copy a concise Service Desk summary to the clipboard;
 - shows elapsed scan time without changing the mouse cursor to a global busy state;
-- samples CPU and disk queue repeatedly and uses the median to reduce transient false positives;
+- samples CPU, disk busy and disk queue repeatedly and uses medians to reduce transient false positives;
+- classifies disk pressure only when both queue depth and disk busy are elevated;
 - groups repeated Windows events by Provider/Event ID;
 - sorts process/event numeric columns using typed values rather than formatted strings;
 - creates HTML/JSON before/after reports;

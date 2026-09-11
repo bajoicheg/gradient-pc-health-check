@@ -35,10 +35,12 @@ public sealed class AssessmentService
             else Add("OK", "Диск", "Свободное место на системном диске", $"{systemDrive.FreeGB:0.#} GB ({systemDrive.FreePercent:0.#}%)", "Запас свободного места нормальный.", 0);
         }
 
-        if (p.DiskQueueLength is double queue)
+        if (p.DiskQueueLength is double queue && p.DiskBusyPercent is double busy)
         {
-            if (queue >= Thresholds.DiskQueueCritical) Add("CRIT", "Диск", "Высокая очередь диска", $"{queue:0.#}", "Проверьте TOP процессов по I/O и состояние накопителя.", 12);
-            else if (queue >= Thresholds.DiskQueueWarn) Add("WARN", "Диск", "Повышенная очередь диска", $"{queue:0.#}", "Проверьте TOP процессов по I/O.", 5);
+            if (queue >= Thresholds.DiskQueueCritical && busy >= Thresholds.DiskBusyCriticalPercent)
+                Add("CRIT", "Диск", "Подтверждённая перегрузка диска", $"busy {busy:0.#}%; queue {queue:0.#}", "Проверьте TOP процессов по I/O, задержки и состояние накопителя. Высокая очередь учитывается только вместе с высокой занятостью диска.", 12);
+            else if (queue >= Thresholds.DiskQueueWarn && busy >= Thresholds.DiskBusyWarnPercent)
+                Add("WARN", "Диск", "Повышенная нагрузка на диск", $"busy {busy:0.#}%; queue {queue:0.#}", "Проверьте TOP процессов по I/O и подтвердите устойчивость нагрузки повторным замером.", 5);
         }
 
         var unhealthy = data.PhysicalDisks.Where(x => !IsHealthyDisk(x.HealthStatus)).ToList();
@@ -135,8 +137,8 @@ public sealed class AssessmentService
             Add(new ActionRecommendation { Id = "InspectCpu", Kind = "Вручную", Title = "Разобрать TOP процессов по CPU", Reason = "Устойчивая загрузка CPU выше порога.", CanAutomate = false, Risk = "Низкий", Verification = "Определить процесс/задачу и подтвердить устойчивую нагрузку несколькими замерами." });
         if (data.Performance.MemoryAvailablePercent <= Thresholds.MemoryWarnAvailablePercent)
             Add(new ActionRecommendation { Id = "InspectMemory", Kind = "Вручную", Title = "Разобрать TOP процессов по RAM", Reason = "Доступной памяти меньше рабочего порога.", CanAutomate = false, Risk = "Низкий", Verification = "Определить источник потребления памяти; не завершать процесс без понимания назначения." });
-        if (data.Performance.DiskQueueLength >= Thresholds.DiskQueueWarn)
-            Add(new ActionRecommendation { Id = "InspectIo", Kind = "Вручную", Title = "Разобрать TOP процессов по I/O", Reason = "Устойчивая очередь диска выше порога.", CanAutomate = false, Risk = "Низкий", Verification = "Подтвердить повторными замерами и проверить состояние накопителя." });
+        if (IsDiskPressureAtLeastWarn(data.Performance))
+            Add(new ActionRecommendation { Id = "InspectIo", Kind = "Вручную", Title = "Разобрать TOP процессов по I/O", Reason = "Одновременно повышены медианная занятость диска и очередь I/O.", CanAutomate = false, Risk = "Низкий", Verification = "Подтвердить повторными замерами, проверить задержки и состояние накопителя." });
         if (data.PhysicalDisks.Any(x => !IsHealthyDisk(x.HealthStatus)))
             Add(new ActionRecommendation { Id = "InspectSmart", Kind = "Вручную", Title = "Эскалировать проверку накопителя", Reason = "Windows сообщает нештатный HealthStatus физического диска.", CanAutomate = false, Risk = "Высокий", Verification = "SMART/диагностика производителя и наличие актуальной резервной копии." });
         if (IsEventSignalSignificant(data.Events))
@@ -166,6 +168,10 @@ public sealed class AssessmentService
         return actions;
     }
 
+    private bool IsDiskPressureAtLeastWarn(PerformanceSnapshot p)
+        => p.DiskQueueLength is double queue && p.DiskBusyPercent is double busy
+           && queue >= Thresholds.DiskQueueWarn && busy >= Thresholds.DiskBusyWarnPercent;
+
     private (int Percent, string Status, List<string> Missing) CalculateCoverage(DiagnosticData data)
     {
         var points = 0;
@@ -179,7 +185,7 @@ public sealed class AssessmentService
         Signal(data.Performance.CpuPercent.HasValue, 15, "CPU");
         Signal(data.Performance.MemoryAvailablePercent.HasValue, 15, "RAM");
         Signal(SystemDrive(data) is { SizeGB: > 0 }, 20, "системный диск");
-        Signal(data.Performance.DiskQueueLength.HasValue, 10, "очередь диска");
+        Signal(data.Performance.DiskQueueLength.HasValue && data.Performance.DiskBusyPercent.HasValue, 10, "нагрузка диска (busy + queue)");
         Signal(data.PhysicalDisks.Any(x => !string.IsNullOrWhiteSpace(x.HealthStatus) && !x.HealthStatus.Equals("Unknown", StringComparison.OrdinalIgnoreCase)), 15, "health физического диска");
         Signal(!string.IsNullOrWhiteSpace(data.System.OS) && !string.IsNullOrWhiteSpace(data.System.BuildNumber), 10, "Windows/build");
         Signal(data.TopCpu.Count > 0 || data.TopMemory.Count > 0 || data.TopIo.Count > 0, 10, "TOP процессов");
