@@ -85,7 +85,7 @@ internal sealed class CommonProblemsCollector
 
     private static List<T> Query<T>(string query, Func<ManagementObject, T> map, int limit, CancellationToken ct)
     {
-        var options = new EnumerationOptions
+        var options = new System.Management.EnumerationOptions
         {
             ReturnImmediately = true, Rewindable = false, BlockSize = 16, Timeout = TimeSpan.FromSeconds(5)
         };
