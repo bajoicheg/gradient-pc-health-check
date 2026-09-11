@@ -19,12 +19,14 @@ public sealed class MainForm : Form
     private readonly Label _ram = new();
     private readonly Label _disk = new();
     private readonly Label _uptime = new();
+    private readonly Label _coverage = new();
     private readonly Label _status = new();
     private readonly ProgressBar _progress = new();
     private readonly Button _scan = new();
     private readonly Button _apply = new();
     private readonly Button _openReport = new();
     private readonly Button _openFolder = new();
+    private readonly Button _copySummary = new();
     private readonly DataGridView _actions = new();
     private readonly DataGridView _findings = new();
     private readonly DataGridView _topCpu = new();
@@ -97,13 +99,14 @@ public sealed class MainForm : Form
 
     private Control Metrics()
     {
-        var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, Margin = new Padding(0, 0, 0, 10) };
-        for (var i = 0; i < 5; i++) t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+        var t = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1, Margin = new Padding(0, 0, 0, 10) };
+        for (var i = 0; i < 6; i++) t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 6F));
         t.Controls.Add(Metric("ИНДЕКС", _score, _state), 0, 0);
-        t.Controls.Add(Metric("CPU", _cpu, Small("текущая загрузка")), 1, 0);
-        t.Controls.Add(Metric("RAM", _ram, Small("использовано")), 2, 0);
-        t.Controls.Add(Metric("СИСТЕМНЫЙ ДИСК", _disk, Small("свободно")), 3, 0);
-        t.Controls.Add(Metric("UPTIME", _uptime, Small("с последней загрузки")), 4, 0);
+        t.Controls.Add(Metric("ПОКРЫТИЕ", _coverage, Small("полнота диагностики")), 1, 0);
+        t.Controls.Add(Metric("CPU", _cpu, Small("текущая загрузка")), 2, 0);
+        t.Controls.Add(Metric("RAM", _ram, Small("использовано")), 3, 0);
+        t.Controls.Add(Metric("СИСТЕМНЫЙ ДИСК", _disk, Small("свободно")), 4, 0);
+        t.Controls.Add(Metric("UPTIME", _uptime, Small("с последней загрузки")), 5, 0);
         return t;
     }
 
@@ -203,14 +206,16 @@ public sealed class MainForm : Form
         SetupButton(_apply, "Применить выбранное", 185, true); _apply.Width = 205; _apply.Click += async (_, _) => await ApplyAsync(); p.Controls.Add(_apply);
         SetupButton(_openReport, "Открыть отчёт", 400, false); _openReport.Width = 125; _openReport.Click += (_, _) => OpenReport(); p.Controls.Add(_openReport);
         SetupButton(_openFolder, "Папка отчётов", 535, false); _openFolder.Width = 125; _openFolder.Click += (_, _) => OpenFolder(); p.Controls.Add(_openFolder);
+        SetupButton(_copySummary, "Копировать сводку", 670, false); _copySummary.Width = 155; _copySummary.Click += (_, _) => CopySummary(); p.Controls.Add(_copySummary);
         _progress.Style = ProgressBarStyle.Marquee; _progress.MarqueeAnimationSpeed = 25; _progress.Visible = false; _progress.Anchor = AnchorStyles.Top | AnchorStyles.Right; _progress.Size = new Size(180, 12); p.Controls.Add(_progress);
         _status.AutoSize = true; _status.ForeColor = Muted; _status.Anchor = AnchorStyles.Top | AnchorStyles.Right; p.Controls.Add(_status);
-        p.Resize += (_, _) => { _progress.Location = new Point(Math.Max(700, p.ClientSize.Width - 190), 9); _status.Location = new Point(Math.Max(650, p.ClientSize.Width - _status.Width - 10), 27); };
+        p.Resize += (_, _) => { _progress.Location = new Point(Math.Max(840, p.ClientSize.Width - 190), 9); _status.Location = new Point(Math.Max(790, p.ClientSize.Width - _status.Width - 10), 27); };
         return p;
     }
 
     private async Task ScanAsync()
     {
+        var started = Stopwatch.StartNew();
         try
         {
             Busy(true, "Запускаю диагностику…");
@@ -220,7 +225,7 @@ public sealed class MainForm : Form
             var saved = _reports.SaveScan(_current);
             _latestReport = saved.Html;
             Populate(_current);
-            _status.Text = $"Готово · {DateTime.Now:HH:mm:ss}";
+            _status.Text = $"Готово · {DateTime.Now:HH:mm:ss} · {started.Elapsed.TotalSeconds:0.0} с";
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Ошибка диагностики", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         finally { Busy(false); }
@@ -292,6 +297,8 @@ public sealed class MainForm : Form
         _cpu.Text = F(d.Performance.CpuPercent, "%"); _ram.Text = F(d.Performance.MemoryUsedPercent, "%");
         var sd = d.LogicalDisks.FirstOrDefault(x => string.Equals(x.Drive, "C:", StringComparison.OrdinalIgnoreCase)); _disk.Text = sd is null ? "—" : $"{sd.FreeGB:0.#} GB";
         _uptime.Text = $"{d.System.UptimeDays:0.#} дн.";
+        _coverage.Text = $"{scan.Assessment.CoveragePercent}%";
+        _coverage.ForeColor = scan.Assessment.CoverageStatus == "HIGH" ? Ok : scan.Assessment.CoverageStatus == "MEDIUM" ? Warn : Crit;
 
         _actions.Rows.Clear();
         foreach (var a in scan.Actions)
@@ -344,6 +351,20 @@ public sealed class MainForm : Form
         _remediation.Rows.Clear(); foreach (var r in v.Remediation.Actions) { var i = _remediation.Rows.Add(r.Id, r.Success ? "Успешно" : "Ошибка", r.ExitCode?.ToString() ?? "—", r.Message); _remediation.Rows[i].Cells[1].Style.ForeColor = r.Success ? Ok : Crit; }
     }
 
+    private void CopySummary()
+    {
+        if (_current is null) return;
+        try
+        {
+            Clipboard.SetText(SupportSummary.Build(_current));
+            _status.Text = $"Сводка скопирована · {DateTime.Now:HH:mm:ss}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Не удалось скопировать сводку", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
     private void OpenReport()
     {
         if (string.IsNullOrWhiteSpace(_latestReport) || !File.Exists(_latestReport)) { MessageBox.Show(this, "Отчёт ещё не сформирован."); return; }
@@ -361,9 +382,11 @@ public sealed class MainForm : Form
         _scan.Enabled = !value;
         _openReport.Enabled = !value;
         _openFolder.Enabled = !value;
+        _copySummary.Enabled = !value && _current is not null;
         _progress.Visible = value;
         if (text is not null) _status.Text = text;
-        Cursor = value ? Cursors.WaitCursor : Cursors.Default;
+        // Do not switch the form-wide cursor for background work. DataGridView/native child
+        // handles can retain an inherited busy cursor after async work has completed.
         UpdateApplyState();
     }
 
