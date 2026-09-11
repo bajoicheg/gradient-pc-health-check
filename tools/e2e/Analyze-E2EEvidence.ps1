@@ -97,7 +97,7 @@ try {
             $archive.Dispose()
         }
 
-        $tempRoot = Join-Path $env:TEMP "GradientPcHealthCheck-Analyze-$([guid]::NewGuid().ToString('N'))"
+        $tempRoot = Join-Path $env:TEMP "GPcHealthCheck-Analyze-$([guid]::NewGuid().ToString('N'))"
         New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
         Expand-Archive -LiteralPath $EvidenceZip -DestinationPath $tempRoot -Force
         $bundleRoot = $tempRoot
@@ -302,12 +302,12 @@ try {
     New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
     $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-    $jsonOutput = Join-Path $OutputDirectory "Gradient-PC-Health-Check-E2E-analysis-$stamp.json"
-    $mdOutput = Join-Path $OutputDirectory "Gradient-PC-Health-Check-E2E-analysis-$stamp.md"
+    $jsonOutput = Join-Path $OutputDirectory "G-PC-Health-Check-E2E-analysis-$stamp.json"
+    $mdOutput = Join-Path $OutputDirectory "G-PC-Health-Check-E2E-analysis-$stamp.md"
     $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $jsonOutput -Encoding UTF8
 
     $markdown = [System.Collections.Generic.List[string]]::new()
-    $markdown.Add('# Gradient PC Health Check — E2E analysis')
+    $markdown.Add('# G PC Health Check — E2E analysis')
     $markdown.Add('')
     $markdown.Add("**Verdict:** $verdict  ")
     $markdown.Add("**Source:** $(Convert-ToMarkdownCell $sourceDescription)  ")

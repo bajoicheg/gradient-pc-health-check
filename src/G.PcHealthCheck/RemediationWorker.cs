@@ -6,14 +6,14 @@ using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 
-namespace Gradient.PcHealthCheck;
+namespace G.PcHealthCheck;
 
 public static class RemediationWorker
 {
     private static readonly string[] Allowed = ["CleanTemp", "FlushDns", "Dism", "Sfc"];
     private static readonly string[] WorkerAllowed = ["FlushDns", "Dism", "Sfc"];
-    private const string PipePrefix = "GradientPcHealthCheck-";
-    private const string InstalledExeName = "Gradient-PC-Health-Check.exe";
+    private const string PipePrefix = "GPcHealthCheck-";
+    private const string InstalledExeName = "G-PC-Health-Check.exe";
 
     public static int Run(string[] args)
     {
@@ -94,9 +94,9 @@ public static class RemediationWorker
         if (requiresAdmin && !IsTrustedElevationLocation(exe))
         {
             throw new InvalidOperationException(
-                "Административные действия разрешены только для проверенной копии Gradient PC Health Check в Program Files. " +
+                "Административные действия разрешены только для проверенной копии G PC Health Check в Program Files. " +
                 "Запуск диагностики и очистки Temp пользователя из Downloads разрешён, но для DISM/SFC сначала разверните EXE в " +
-                "%ProgramFiles%\\Gradient\\PCHealthCheck средствами корпоративного управления ПО.");
+                "%ProgramFiles%\\G\\PCHealthCheck средствами корпоративного управления ПО.");
         }
 
         if (!requiresAdmin || DiagnosticsService.IsAdministrator())
@@ -435,7 +435,7 @@ public static class RemediationWorker
             if (string.IsNullOrWhiteSpace(programFiles)) return false;
 
             var full = Path.GetFullPath(exePath).TrimEnd(Path.DirectorySeparatorChar);
-            var expected = Path.GetFullPath(Path.Combine(programFiles, "Gradient", "PCHealthCheck", InstalledExeName))
+            var expected = Path.GetFullPath(Path.Combine(programFiles, "G", "PCHealthCheck", InstalledExeName))
                 .TrimEnd(Path.DirectorySeparatorChar);
             if (!string.Equals(full, expected, StringComparison.OrdinalIgnoreCase)) return false;
 

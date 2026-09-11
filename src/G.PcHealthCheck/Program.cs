@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Gradient.PcHealthCheck;
+namespace G.PcHealthCheck;
 
 internal static class Program
 {

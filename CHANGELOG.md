@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.8 — rename to G PC Health Check
+
+Brand-neutral rename baseline before 0.4.0; diagnostic and remediation behavior is unchanged from 0.3.7.
+
+- Product name changed to `G PC Health Check`.
+- Executable renamed to `G-PC-Health-Check.exe`.
+- .NET namespace/project path changed from the legacy brand to `G.PcHealthCheck` / `src/G.PcHealthCheck`.
+- Canonical privileged path changed to `%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`.
+- Local report/evidence paths, named-pipe prefix, CI artifacts, pilot bundles, Release assets, SBOM metadata and repository URLs now use `G` / `g`.
+- Current repository name is expected to be `g-pc-health-check`.
+- No runtime diagnostic/remediation logic change.
+- Application version: `0.3.8`.
+
 ## 0.3.7 — Supply-chain attestation hotfix
 
 Hotfix for the public build-provenance pipeline; application runtime behavior is unchanged from 0.3.6/0.3.5.

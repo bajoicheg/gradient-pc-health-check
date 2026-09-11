@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$OutputDirectory = '.\src\Gradient.PcHealthCheck\assets'
+    [string]$OutputDirectory = '.\src\G.PcHealthCheck\assets'
 )
 
 $ErrorActionPreference = 'Stop'

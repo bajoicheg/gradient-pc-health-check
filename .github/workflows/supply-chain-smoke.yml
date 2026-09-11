@@ -35,7 +35,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          [xml]$project = Get-Content src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -Raw
+          [xml]$project = Get-Content src/G.PcHealthCheck/G.PcHealthCheck.csproj -Raw
           $version = [string]$project.Project.PropertyGroup.Version
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected version: $version" }
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -44,8 +44,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -p:EnableWindowsTargeting=true
-          test -s src/Gradient.PcHealthCheck/obj/project.assets.json
+          dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj -p:EnableWindowsTargeting=true
+          test -s src/G.PcHealthCheck/obj/project.assets.json
 
       - name: Download and verify pinned Microsoft SBOM Tool
         id: sbomtool
@@ -67,15 +67,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/smoke/drop artifacts/smoke/sbom
-          printf 'Gradient PC Health Check supply-chain smoke\n' > artifacts/smoke/drop/smoke.txt
+          printf 'G PC Health Check supply-chain smoke\n' > artifacts/smoke/drop/smoke.txt
 
           "$SBOM_TOOL" generate \
             -b "$GITHUB_WORKSPACE/artifacts/smoke/drop" \
             -bc "$GITHUB_WORKSPACE" \
             -m "$GITHUB_WORKSPACE/artifacts/smoke/sbom" \
-            -pn "Gradient PC Health Check" \
+            -pn "G PC Health Check" \
             -pv "$VERSION" \
-            -ps "Organization: Gradient" \
+            -ps "Organization: G" \
             -nsb "https://github.com/${{ github.repository }}" \
             -mi SPDX:2.2
 

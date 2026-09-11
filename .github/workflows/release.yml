@@ -58,7 +58,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          [xml]$project = Get-Content src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -Raw
+          [xml]$project = Get-Content src/G.PcHealthCheck/G.PcHealthCheck.csproj -Raw
           $version = [string]$project.Project.PropertyGroup.Version
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected release version: $version" }
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -80,20 +80,20 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-assets/final release-assets/pilot
-          gh run download "$RUN_ID" --repo "$REPO" --name gradient-pc-health-check-windows-x64 --dir release-assets/final
-          gh run download "$RUN_ID" --repo "$REPO" --name gradient-pc-health-check-pilot-e2e --dir release-assets/pilot
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-windows-x64 --dir release-assets/final
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-pilot-e2e --dir release-assets/pilot
 
       - name: Verify release inputs
         if: steps.exists.outputs.exists == 'false'
         shell: pwsh
         run: |
-          $exe = Get-Item release-assets/final/Gradient-PC-Health-Check.exe -ErrorAction Stop
-          $checksum = Get-Item release-assets/final/Gradient-PC-Health-Check.exe.sha256 -ErrorAction Stop
-          $pilot = Get-ChildItem release-assets/pilot -Filter 'Gradient-PC-Health-Check-*-pilot.zip' -File | Select-Object -First 1
+          $exe = Get-Item release-assets/final/G-PC-Health-Check.exe -ErrorAction Stop
+          $checksum = Get-Item release-assets/final/G-PC-Health-Check.exe.sha256 -ErrorAction Stop
+          $pilot = Get-ChildItem release-assets/pilot -Filter 'G-PC-Health-Check-*-pilot.zip' -File | Select-Object -First 1
           if ($null -eq $pilot) { throw 'Pilot E2E ZIP not found.' }
 
           $line = (Get-Content $checksum.FullName -Raw -Encoding ASCII).Trim()
-          if ($line -notmatch '^(?<hash>[0-9a-fA-F]{64})\s+\*?Gradient-PC-Health-Check\.exe$') {
+          if ($line -notmatch '^(?<hash>[0-9a-fA-F]{64})\s+\*?G-PC-Health-Check\.exe$') {
             throw 'Malformed checksum file.'
           }
           $actual = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -111,26 +111,26 @@ jobs:
           HEAD_SHA: ${{ steps.source.outputs.head_sha }}
         run: |
           set -euo pipefail
-          PILOT_ZIP=$(find release-assets/pilot -maxdepth 1 -type f -name 'Gradient-PC-Health-Check-*-pilot.zip' -print -quit)
+          PILOT_ZIP=$(find release-assets/pilot -maxdepth 1 -type f -name 'G-PC-Health-Check-*-pilot.zip' -print -quit)
           test -n "$PILOT_ZIP"
           cat > release-notes.md <<'EOF'
-          Gradient PC Health Check — Windows 11 Service Desk diagnostics and controlled remediation.
+          G PC Health Check — Windows 11 Service Desk diagnostics and controlled remediation.
 
           Downloads:
-          - `Gradient-PC-Health-Check.exe` — single-file self-contained Windows x64 application;
-          - `Gradient-PC-Health-Check.exe.sha256` — checksum for the EXE;
+          - `G-PC-Health-Check.exe` — single-file self-contained Windows x64 application;
+          - `G-PC-Health-Check.exe.sha256` — checksum for the EXE;
           - `*-pilot.zip` — optional E2E kit and documentation for pilot verification.
 
           Administrative remediation (DISM/SFC) is allowed only from the canonical protected path:
-          `C:\Program Files\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`.
+          `C:\Program Files\G\PCHealthCheck\G-PC-Health-Check.exe`.
           User Temp cleanup runs without elevation in the interactive user's context.
           EOF
 
           gh release create "${{ steps.version.outputs.tag }}" \
             --repo "$REPO" \
             --target "$HEAD_SHA" \
-            --title "Gradient PC Health Check ${{ steps.version.outputs.version }}" \
+            --title "G PC Health Check ${{ steps.version.outputs.version }}" \
             --notes-file release-notes.md \
-            release-assets/final/Gradient-PC-Health-Check.exe \
-            release-assets/final/Gradient-PC-Health-Check.exe.sha256 \
+            release-assets/final/G-PC-Health-Check.exe \
+            release-assets/final/G-PC-Health-Check.exe.sha256 \
             "$PILOT_ZIP"

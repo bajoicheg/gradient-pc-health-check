@@ -1,8 +1,8 @@
-namespace Gradient.PcHealthCheck;
+namespace G.PcHealthCheck;
 
 internal static class BrandAssets
 {
-    private const string ShieldResourceName = "Gradient.PcHealthCheck.g-shield.png";
+    private const string ShieldResourceName = "G.PcHealthCheck.g-shield.png";
 
     public static Image? LoadShield()
     {

@@ -7,7 +7,7 @@ Contributions are welcome through pull requests.
 - Work from a fork or feature branch; do not expect direct write access to this repository.
 - Keep changes focused and explain the user-visible and security impact.
 - Do not commit secrets, credentials, internal URLs, workstation evidence, user data, or production diagnostic bundles.
-- Do not attach raw `Gradient-PC-Health-Check-E2E-*.zip` evidence to a public issue or pull request.
+- Do not attach raw `G-PC-Health-Check-E2E-*.zip` evidence to a public issue or pull request.
 - Do not weaken the remediation allow-list, canonical-path checks, nonce/session binding, reparse-point protections, or CI security gates without an explicit security rationale.
 
 ## Required checks

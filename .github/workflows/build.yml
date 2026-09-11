@@ -50,7 +50,7 @@ jobs:
             & pwsh -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Prepare-CleanTempScenario.ps1
             if ($LASTEXITCODE -ne 0) { throw "Prepare-CleanTempScenario failed with exit code $LASTEXITCODE" }
 
-            $root = Join-Path $env:TEMP 'GradientPcHealthCheck-E2E'
+            $root = Join-Path $env:TEMP 'GPcHealthCheck-E2E'
             $old = Join-Path $root 'old-delete-me.txt'
             $fresh = Join-Path $root 'fresh-must-stay.txt'
             $manifest = Join-Path $root 'e2e-manifest.json'
@@ -68,13 +68,13 @@ jobs:
             New-Item -ItemType Directory -Force -Path $evidenceOut | Out-Null
             & pwsh -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Collect-E2EEvidence.ps1 -OutputDirectory $evidenceOut -LatestReportFiles 2
             if ($LASTEXITCODE -ne 0) { throw "Collect-E2EEvidence failed with exit code $LASTEXITCODE" }
-            $zip = Get-ChildItem $evidenceOut -Filter 'Gradient-PC-Health-Check-E2E-*.zip' -File | Select-Object -First 1
+            $zip = Get-ChildItem $evidenceOut -Filter 'G-PC-Health-Check-E2E-*.zip' -File | Select-Object -First 1
             if ($null -eq $zip -or $zip.Length -le 0) { throw 'Evidence collector did not create a non-empty ZIP.' }
           }
           finally {
             & pwsh -NoLogo -NoProfile -NonInteractive -File .\tools\e2e\Cleanup-E2EScenario.ps1
             if ($LASTEXITCODE -ne 0) { throw "Cleanup-E2EScenario failed with exit code $LASTEXITCODE" }
-            if (Test-Path (Join-Path $env:TEMP 'GradientPcHealthCheck-E2E')) { throw 'E2E Temp root remains after cleanup.' }
+            if (Test-Path (Join-Path $env:TEMP 'GPcHealthCheck-E2E')) { throw 'E2E Temp root remains after cleanup.' }
           }
 
           Write-Host 'E2E PowerShell tools smoke passed.'
@@ -101,8 +101,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           .\tools\branding\Generate-BrandAssets.ps1
-          $shield = '.\src\Gradient.PcHealthCheck\assets\g-shield.png'
-          $icon = '.\src\Gradient.PcHealthCheck\assets\gpchc.ico'
+          $shield = '.\src\G.PcHealthCheck\assets\g-shield.png'
+          $icon = '.\src\G.PcHealthCheck\assets\gpchc.ico'
           $shieldHash = (Get-FileHash $shield -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($shieldHash -ne '5157c5cf83a6cfddb74c51701a693e401e36b400812505a1e46e15d760c72877') {
             throw "Corporate shield provenance mismatch: $shieldHash"
@@ -116,12 +116,12 @@ jobs:
           dotnet-version: '8.0.425'
 
       - name: Restore
-        run: dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
+        run: dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj
 
       - name: NuGet vulnerability gate
         shell: pwsh
         run: |
-          $output = dotnet list src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj package --vulnerable --include-transitive --format json
+          $output = dotnet list src/G.PcHealthCheck/G.PcHealthCheck.csproj package --vulnerable --include-transitive --format json
           if ($LASTEXITCODE -ne 0) { throw "NuGet vulnerability audit command failed with exit code $LASTEXITCODE" }
           $audit = ($output -join "`n") | ConvertFrom-Json
           $vulnerable = @()
@@ -141,21 +141,21 @@ jobs:
           Write-Host "NuGet vulnerability gate: no known vulnerable packages."
 
       - name: Build
-        run: dotnet build src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release --no-restore -warnaserror
+        run: dotnet build src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release --no-restore -warnaserror
 
       - name: Source-build self-test
         shell: pwsh
         run: |
-          dotnet run --project src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release --no-build -- --selftest
+          dotnet run --project src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release --no-build -- --selftest
           if ($LASTEXITCODE -ne 0) { throw "Source-build self-test failed with exit code $LASTEXITCODE" }
 
       - name: Publish single EXE
-        run: dotnet publish src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/publish
+        run: dotnet publish src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true --no-restore -o artifacts/publish
 
       - name: Published EXE self-test
         shell: pwsh
         run: |
-          $exe = (Resolve-Path artifacts/publish/Gradient-PC-Health-Check.exe).Path
+          $exe = (Resolve-Path artifacts/publish/G-PC-Health-Check.exe).Path
           $process = Start-Process -FilePath $exe -ArgumentList @('--selftest') -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Published single-file EXE self-test failed with exit code $($process.ExitCode)" }
           Write-Host "Published single-file EXE self-test passed."
@@ -163,9 +163,9 @@ jobs:
       - name: Published worker security negative tests
         shell: pwsh
         run: |
-          $exe = (Resolve-Path artifacts/publish/Gradient-PC-Health-Check.exe).Path
+          $exe = (Resolve-Path artifacts/publish/G-PC-Health-Check.exe).Path
           $session = [guid]::NewGuid().ToString('D')
-          $pipe = "GradientPcHealthCheck-$session"
+          $pipe = "GPcHealthCheck-$session"
           $nonce = 'A' * 64
 
           # Privileged worker mode must fail closed from any non-canonical path.
@@ -176,8 +176,8 @@ jobs:
           $p = Start-Process -FilePath $exe -ArgumentList @('--bootstrap-worker') -Wait -PassThru
           if ($p.ExitCode -ne 48) { throw "Disabled bootstrap did not fail closed. Exit code: $($p.ExitCode)" }
 
-          $installDir = Join-Path $env:ProgramFiles 'Gradient\PCHealthCheck'
-          $installed = Join-Path $installDir 'Gradient-PC-Health-Check.exe'
+          $installDir = Join-Path $env:ProgramFiles 'G\PCHealthCheck'
+          $installed = Join-Path $installDir 'G-PC-Health-Check.exe'
           New-Item -ItemType Directory -Force -Path $installDir | Out-Null
           Copy-Item -LiteralPath $exe -Destination $installed -Force
           if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne (Get-FileHash $installed -Algorithm SHA256).Hash) {
@@ -203,9 +203,9 @@ jobs:
           finally {
             Remove-Item -LiteralPath $installed -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $installDir -Force -ErrorAction SilentlyContinue
-            $gradientDir = Split-Path $installDir -Parent
-            if ((Test-Path $gradientDir) -and -not (Get-ChildItem -LiteralPath $gradientDir -Force | Select-Object -First 1)) {
-              Remove-Item -LiteralPath $gradientDir -Force -ErrorAction SilentlyContinue
+            $gDir = Split-Path $installDir -Parent
+            if ((Test-Path $gDir) -and -not (Get-ChildItem -LiteralPath $gDir -Force | Select-Object -First 1)) {
+              Remove-Item -LiteralPath $gDir -Force -ErrorAction SilentlyContinue
             }
           }
 
@@ -214,11 +214,11 @@ jobs:
       - name: Verify package, version and checksum
         shell: pwsh
         run: |
-          $exe = Get-Item artifacts/publish/Gradient-PC-Health-Check.exe -ErrorAction Stop
-          $unexpected = Get-ChildItem artifacts/publish -File | Where-Object Name -ne 'Gradient-PC-Health-Check.exe'
+          $exe = Get-Item artifacts/publish/G-PC-Health-Check.exe -ErrorAction Stop
+          $unexpected = Get-ChildItem artifacts/publish -File | Where-Object Name -ne 'G-PC-Health-Check.exe'
           if ($unexpected) { throw "Single-file gate failed: $($unexpected.Name -join ', ')" }
 
-          [xml]$project = Get-Content src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
+          [xml]$project = Get-Content src/G.PcHealthCheck/G.PcHealthCheck.csproj
           $projectVersion = [string]$project.Project.PropertyGroup.Version
           $actualFileVersion = [Version][System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe.FullName).FileVersion
           if ([string]::IsNullOrWhiteSpace($projectVersion)) { throw 'Project Version is empty.' }
@@ -229,8 +229,8 @@ jobs:
 
           $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           New-Item -ItemType Directory -Force artifacts/final | Out-Null
-          Copy-Item $exe.FullName artifacts/final/Gradient-PC-Health-Check.exe
-          Set-Content artifacts/final/Gradient-PC-Health-Check.exe.sha256 "$hash  Gradient-PC-Health-Check.exe" -Encoding ascii
+          Copy-Item $exe.FullName artifacts/final/G-PC-Health-Check.exe
+          Set-Content artifacts/final/G-PC-Health-Check.exe.sha256 "$hash  G-PC-Health-Check.exe" -Encoding ascii
           Write-Host "Version: $actualFileVersion"
           Write-Host "SHA-256: $hash"
 
@@ -239,12 +239,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           .\tools\ci\Create-PilotBundle.ps1 `
-            -ExePath .\artifacts\final\Gradient-PC-Health-Check.exe `
-            -ChecksumPath .\artifacts\final\Gradient-PC-Health-Check.exe.sha256 `
+            -ExePath .\artifacts\final\G-PC-Health-Check.exe `
+            -ChecksumPath .\artifacts\final\G-PC-Health-Check.exe.sha256 `
             -OutputDirectory .\artifacts\pilot `
             -GitSha $env:GITHUB_SHA
 
-          $pilotZip = Get-ChildItem .\artifacts\pilot -Filter 'Gradient-PC-Health-Check-*-pilot.zip' -File | Select-Object -First 1
+          $pilotZip = Get-ChildItem .\artifacts\pilot -Filter 'G-PC-Health-Check-*-pilot.zip' -File | Select-Object -First 1
           if ($null -eq $pilotZip -or $pilotZip.Length -le 0) { throw 'Pilot bundle ZIP missing or empty.' }
 
           $verify = Join-Path $env:RUNNER_TEMP 'gpchc-pilot-verify'
@@ -253,7 +253,7 @@ jobs:
           Expand-Archive -LiteralPath $pilotZip.FullName -DestinationPath $verify -Force
 
           $manifest = Get-Content (Join-Path $verify 'package-manifest.json') -Raw | ConvertFrom-Json
-          $packagedExe = Join-Path $verify 'Gradient-PC-Health-Check.exe'
+          $packagedExe = Join-Path $verify 'G-PC-Health-Check.exe'
           if (-not (Test-Path $packagedExe -PathType Leaf)) { throw 'Packaged EXE missing.' }
           $packagedHash = (Get-FileHash $packagedExe -Algorithm SHA256).Hash.ToLowerInvariant()
           if ($packagedHash -ne [string]$manifest.sha256) { throw 'Packaged EXE hash does not match package manifest.' }
@@ -274,7 +274,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: gradient-pc-health-check-windows-x64
+          name: g-pc-health-check-windows-x64
           path: artifacts/final/*
           if-no-files-found: error
           retention-days: 30
@@ -283,7 +283,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: gradient-pc-health-check-pilot-e2e
-          path: artifacts/pilot/Gradient-PC-Health-Check-*-pilot.zip
+          name: g-pc-health-check-pilot-e2e
+          path: artifacts/pilot/G-PC-Health-Check-*-pilot.zip
           if-no-files-found: error
           retention-days: 30

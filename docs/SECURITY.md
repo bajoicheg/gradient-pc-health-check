@@ -7,7 +7,7 @@
 3. `CleanTemp` не является privileged remediation: он работает только с `%LOCALAPPDATA%\Temp` интерактивного пользователя и выполняется только без admin token.
 4. `CleanTemp` не очищает `%WINDIR%\Temp`, не удаляет каталоги целиком, не проходит через reparse points/junction/symlink и не принимается elevated worker-ом.
 5. Elevated worker — тот же EXE, а не PowerShell/BAT/helper из внешнего каталога.
-6. Worker разрешён только из точного канонического пути `%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`.
+6. Worker разрешён только из точного канонического пути `%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`.
 7. Worker принимает только hardcoded allow-list `FlushDns`, `Dism`, `Sfc`; `CleanTemp`, unknown и mixed known/unknown списки отклоняются до подключения к IPC.
 8. `Dism` и `Sfc` требуют administrative token. `FlushDns` обычно выполняется локально без elevation; при совместном запуске с privileged action может входить в тот же worker batch.
 9. Worker не принимает произвольную команду, executable path, каталог удаления или output path.
@@ -33,13 +33,13 @@
 
 Для `Dism`/`Sfc` GUI до показа UAC проверяет собственный путь. Разрешён только:
 
-`%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`
+`%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`
 
 Проверяются:
 
 - точное совпадение нормализованного пути;
 - отсутствие reparse-point у EXE;
-- отсутствие reparse-point у существующих каталогов `Gradient` и `PCHealthCheck` в цепочке.
+- отсутствие reparse-point у существующих каталогов `G` и `PCHealthCheck` в цепочке.
 
 Из Downloads диагностика, отчёты, `CleanTemp` и `FlushDns` разрешены без elevation. При выборе `Dism`/`Sfc` из Downloads операция отклоняется **до** запуска UAC.
 
@@ -48,7 +48,7 @@
 Перед запуском worker GUI:
 
 - генерирует случайный GUID session id;
-- создаёт локальный named pipe `GradientPcHealthCheck-<GUID>`;
+- создаёт локальный named pipe `GPcHealthCheck-<GUID>`;
 - генерирует 256-битный случайный nonce;
 - передаёт только session id, allow-listed action IDs, pipe name и nonce;
 - запускает тот же канонический EXE через `runas`.
@@ -86,7 +86,7 @@ Service Desk может ввести в UAC отдельную локальну�
 
 Канонический trusted path для administrative remediation:
 
-`%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`
+`%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`
 
 Централизованное развёртывание через корпоративный software deployment — ожидаемый вариант для пилота. Диагностика и непривилегированные действия могут запускаться из другого пути.
 

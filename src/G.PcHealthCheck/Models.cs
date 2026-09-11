@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace Gradient.PcHealthCheck;
+namespace G.PcHealthCheck;
 
 public sealed class Thresholds
 {

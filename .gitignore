@@ -16,7 +16,7 @@ artifacts/
 secrets/
 
 # Diagnostic and E2E evidence can contain workstation/user data
-Gradient-PC-Health-Check-E2E-*.zip
+G-PC-Health-Check-E2E-*.zip
 PCHealth_*.json
 PCHealth_*.html
 PCHealth_*.zip

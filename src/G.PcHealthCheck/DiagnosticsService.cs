@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.ServiceProcess;
 
-namespace Gradient.PcHealthCheck;
+namespace G.PcHealthCheck;
 
 public sealed class DiagnosticsService
 {

@@ -1,4 +1,4 @@
-namespace Gradient.PcHealthCheck;
+namespace G.PcHealthCheck;
 
 internal static class SelfTest
 {
@@ -117,14 +117,14 @@ internal static class SelfTest
         var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         if (!string.IsNullOrWhiteSpace(pf))
         {
-            var trusted = Path.Combine(pf, "Gradient", "PCHealthCheck", "Gradient-PC-Health-Check.exe");
+            var trusted = Path.Combine(pf, "G", "PCHealthCheck", "G-PC-Health-Check.exe");
             if (!RemediationWorker.IsTrustedElevationLocation(trusted)) return 1;
 
-            var arbitraryProgramFiles = Path.Combine(pf, "OtherApp", "Gradient-PC-Health-Check.exe");
+            var arbitraryProgramFiles = Path.Combine(pf, "OtherApp", "G-PC-Health-Check.exe");
             if (RemediationWorker.IsTrustedElevationLocation(arbitraryProgramFiles)) return 2;
         }
 
-        var tempCandidate = Path.Combine(Path.GetTempPath(), "Gradient-PC-Health-Check.exe");
+        var tempCandidate = Path.Combine(Path.GetTempPath(), "G-PC-Health-Check.exe");
         if (RemediationWorker.IsTrustedElevationLocation(tempCandidate)) return 3;
 
         if (RemediationWorker.RunBootstrap(["--bootstrap-worker"]) != 48) return 4;

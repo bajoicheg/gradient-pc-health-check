@@ -1,4 +1,4 @@
-# Gradient PC Health Check 0.3.5 — E2E test plan
+# G PC Health Check 0.3.5 — E2E test plan
 
 Цель: подтвердить на реальном корпоративном Windows 11 ПК финальный single-file EXE, работу Service Desk UX, непривилегированный `CleanTemp`, trusted-path/UAC boundary для DISM/SFC и корректность evidence.
 
@@ -14,7 +14,7 @@
 
 - Windows 11 x64, желательно типовой корпоративный образ;
 - обычная пользовательская сессия;
-- тестовый `Gradient-PC-Health-Check.exe` и `.sha256` из одного зелёного `Windows EXE` run;
+- тестовый `G-PC-Health-Check.exe` и `.sha256` из одного зелёного `Windows EXE` run;
 - известен SHA-256 артефакта;
 - для отдельного privileged E2E доступна Service Desk admin-учётка.
 
@@ -52,7 +52,7 @@ powershell.exe -NoLogo -NoProfile -File .\e2e\Prepare-CleanTempScenario.ps1 -Inc
 - диагностика работает без admin token;
 - GUI остаётся отзывчивым;
 - отсутствующая телеметрия не выглядит как полностью здоровый результат;
-- отчёт создаётся в `%LOCALAPPDATA%\Gradient\PCHealthCheck\Reports`.
+- отчёт создаётся в `%LOCALAPPDATA%\G\PCHealthCheck\Reports`.
 
 ## 4. CleanTemp из Downloads — без UAC
 
@@ -94,7 +94,7 @@ Exit code `0` означает PASS.
 
 - UAC не появляется;
 - SFC не запускается;
-- приложение сообщает, что DISM/SFC разрешены только для проверенной копии в `%ProgramFiles%\Gradient\PCHealthCheck`;
+- приложение сообщает, что DISM/SFC разрешены только для проверенной копии в `%ProgramFiles%\G\PCHealthCheck`;
 - GUI не падает и позволяет продолжить работу.
 
 После проверки снимите галочку SFC.
@@ -106,19 +106,19 @@ Exit code `0` означает PASS.
 До и после копирования сравните SHA-256:
 
 ```powershell
-Get-FileHash .\Gradient-PC-Health-Check.exe -Algorithm SHA256
-Get-Content .\Gradient-PC-Health-Check.exe.sha256
-Get-FileHash "$env:ProgramFiles\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe" -Algorithm SHA256
+Get-FileHash .\G-PC-Health-Check.exe -Algorithm SHA256
+Get-Content .\G-PC-Health-Check.exe.sha256
+Get-FileHash "$env:ProgramFiles\G\PCHealthCheck\G-PC-Health-Check.exe" -Algorithm SHA256
 ```
 
 ### Acceptance
 
 - все хэши совпадают;
-- `Gradient` и `PCHealthCheck` — обычные каталоги, не junction/symlink/reparse point.
+- `G` и `PCHealthCheck` — обычные каталоги, не junction/symlink/reparse point.
 
 ## 8. Canonical copy как standard user
 
-1. Запустите `%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe` обычным двойным кликом.
+1. Запустите `%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe` обычным двойным кликом.
 2. Убедитесь, что сама диагностика не требует UAC.
 3. `CleanTemp` по-прежнему должен выполняться без UAC.
 
@@ -177,7 +177,7 @@ DISM можно проверять отдельно только при нали
 ## 13. Собрать evidence
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -File .\e2e\Collect-E2EEvidence.ps1 -SourceExe .\Gradient-PC-Health-Check.exe
+powershell.exe -NoLogo -NoProfile -File .\e2e\Collect-E2EEvidence.ps1 -SourceExe .\G-PC-Health-Check.exe
 ```
 
 Evidence ZIP может содержать имя ПК/пользователя и диагностические сведения, поэтому является внутренним Service Desk artifact.

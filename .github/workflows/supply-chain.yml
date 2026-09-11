@@ -69,7 +69,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          [xml]$project = Get-Content src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -Raw
+          [xml]$project = Get-Content src/G.PcHealthCheck/G.PcHealthCheck.csproj -Raw
           $version = [string]$project.Project.PropertyGroup.Version
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected version: $version" }
           "version=$version" >> $env:GITHUB_OUTPUT
@@ -79,17 +79,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/final artifacts/pilot
-          gh run download "$RUN_ID" --repo "$REPO" --name gradient-pc-health-check-windows-x64 --dir artifacts/final
-          gh run download "$RUN_ID" --repo "$REPO" --name gradient-pc-health-check-pilot-e2e --dir artifacts/pilot
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-windows-x64 --dir artifacts/final
+          gh run download "$RUN_ID" --repo "$REPO" --name g-pc-health-check-pilot-e2e --dir artifacts/pilot
 
       - name: Verify downloaded subjects
         id: subjects
         shell: bash
         run: |
           set -euo pipefail
-          EXE=artifacts/final/Gradient-PC-Health-Check.exe
-          CHECKSUM=artifacts/final/Gradient-PC-Health-Check.exe.sha256
-          PILOT=$(find artifacts/pilot -maxdepth 1 -type f -name 'Gradient-PC-Health-Check-*-pilot.zip' -print -quit)
+          EXE=artifacts/final/G-PC-Health-Check.exe
+          CHECKSUM=artifacts/final/G-PC-Health-Check.exe.sha256
+          PILOT=$(find artifacts/pilot -maxdepth 1 -type f -name 'G-PC-Health-Check-*-pilot.zip' -print -quit)
           test -s "$EXE"
           test -s "$CHECKSUM"
           test -n "$PILOT" && test -s "$PILOT"
@@ -109,8 +109,8 @@ jobs:
           set -euo pipefail
           # The source project targets Windows. On the Linux attestation runner we restore
           # only dependency metadata for component detection; no application build occurs here.
-          dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -p:EnableWindowsTargeting=true
-          test -s src/Gradient.PcHealthCheck/obj/project.assets.json
+          dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj -p:EnableWindowsTargeting=true
+          test -s src/G.PcHealthCheck/obj/project.assets.json
 
       - name: Download and verify pinned Microsoft SBOM Tool
         id: sbomtool
@@ -137,15 +137,15 @@ jobs:
             -b "$GITHUB_WORKSPACE/artifacts/final" \
             -bc "$GITHUB_WORKSPACE" \
             -m "$GITHUB_WORKSPACE/artifacts/sbom" \
-            -pn "Gradient PC Health Check" \
+            -pn "G PC Health Check" \
             -pv "$VERSION" \
-            -ps "Organization: Gradient" \
+            -ps "Organization: G" \
             -nsb "https://github.com/$REPO" \
             -mi SPDX:2.2
 
           GENERATED=$(find artifacts/sbom -type f -name 'manifest.spdx.json' -print -quit)
           test -n "$GENERATED" && test -s "$GENERATED"
-          FINAL="artifacts/sbom/Gradient-PC-Health-Check-$VERSION.spdx.json"
+          FINAL="artifacts/sbom/G-PC-Health-Check-$VERSION.spdx.json"
           cp "$GENERATED" "$FINAL"
 
           jq -e '.spdxVersion == "SPDX-2.2"' "$FINAL" >/dev/null
@@ -174,7 +174,7 @@ jobs:
       - name: Upload SBOM
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: gradient-pc-health-check-sbom
+          name: g-pc-health-check-sbom
           path: |
             ${{ steps.sbom.outputs.sbom_path }}
             ${{ steps.sbom.outputs.sbom_path }}.sha256

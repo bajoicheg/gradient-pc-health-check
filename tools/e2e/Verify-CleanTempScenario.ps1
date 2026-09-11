@@ -4,7 +4,7 @@ param()
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$root = Join-Path $env:TEMP 'GradientPcHealthCheck-E2E'
+$root = Join-Path $env:TEMP 'GPcHealthCheck-E2E'
 $manifestPath = Join-Path $root 'e2e-manifest.json'
 if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "E2E manifest not found: $manifestPath. Run Prepare-CleanTempScenario.ps1 first."
@@ -52,7 +52,7 @@ $resultPath = Join-Path $root 'e2e-verification.json'
 $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 
 Write-Host ''
-Write-Host 'Gradient PC Health Check — CleanTemp E2E verification'
+Write-Host 'G PC Health Check — CleanTemp E2E verification'
 foreach ($check in $checks) {
     $mark = if ($check.passed) { 'PASS' } else { 'FAIL' }
     $color = if ($check.passed) { 'Green' } else { 'Red' }

@@ -6,4 +6,4 @@
 4. DISM/SFC остаются ручным выбором инженера и не должны становиться автоматической «оптимизацией».
 5. Authenticode code signing пока не включён; текущая сборка контролируется SHA-256. По этой причине административные remediation из Downloads/user-writable path в 0.3.4 заблокированы.
 6. Пороговые значения Health Score являются эвристикой Service Desk и требуют калибровки на реальных инцидентах.
-7. Trusted remediation path пока один: `%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`. До централизованного deployment административные действия не считаются готовыми к широкому использованию.
+7. Trusted remediation path пока один: `%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`. До централизованного deployment административные действия не считаются готовыми к широкому использованию.

@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
 
-namespace Gradient.PcHealthCheck;
+namespace G.PcHealthCheck;
 
 public sealed class MainForm : Form
 {
@@ -47,7 +47,7 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "Gradient PC Health Check";
+        Text = "G PC Health Check";
         Width = 1320;
         Height = 840;
         MinimumSize = new Size(1080, 680);
@@ -87,7 +87,7 @@ public sealed class MainForm : Form
             Image = BrandAssets.LoadShield()
         };
         p.Controls.Add(logo);
-        p.Controls.Add(new Label { Text = "Gradient PC Health Check", Font = new Font("Segoe UI Semibold", 18F), ForeColor = Navy, AutoSize = true, Location = new Point(86, 13) });
+        p.Controls.Add(new Label { Text = "G PC Health Check", Font = new Font("Segoe UI Semibold", 18F), ForeColor = Navy, AutoSize = true, Location = new Point(86, 13) });
         p.Controls.Add(new Label { Text = "Service Desk · диагностика и контролируемые действия для Windows 11", ForeColor = Muted, AutoSize = true, Location = new Point(88, 49) });
         _host.Font = new Font("Segoe UI Semibold", 10F); _host.ForeColor = Navy; _host.AutoSize = true; _host.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         p.Controls.Add(_host);
@@ -257,7 +257,7 @@ public sealed class MainForm : Form
             PopulateVerification(verification);
             _tabs.SelectedIndex = 4;
             var ok = batch.Actions.Count(x => x.Success);
-            MessageBox.Show(this, $"Выполнено: {ok}/{batch.Actions.Count}. Автопроверка завершена.\nИндекс: {before.Assessment.Score} → {after.Assessment.Score}.", "Gradient PC Health Check", MessageBoxButtons.OK, batch.Actions.All(x => x.Success) ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            MessageBox.Show(this, $"Выполнено: {ok}/{batch.Actions.Count}. Автопроверка завершена.\nИндекс: {before.Assessment.Score} → {after.Assessment.Score}.", "G PC Health Check", MessageBoxButtons.OK, batch.Actions.All(x => x.Success) ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
         catch (OperationCanceledException ex) { MessageBox.Show(this, ex.Message, "Операция отменена", MessageBoxButtons.OK, MessageBoxIcon.Information); }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Ошибка remediation", MessageBoxButtons.OK, MessageBoxIcon.Error); }

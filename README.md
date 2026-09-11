@@ -1,14 +1,14 @@
-# Gradient PC Health Check
+# G PC Health Check
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
 
-Current project version: **0.3.7**. The application is a self-contained single-file `Gradient-PC-Health-Check.exe`.
+Current project version: **0.3.8**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
-> **Security / privacy:** never attach an unreviewed `Gradient-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
+> **Security / privacy:** never attach an unreviewed `G-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.3.7 does
+## What 0.3.8 does
 
-Runtime diagnostics and remediation behavior are unchanged from 0.3.5. Version 0.3.7 completes the public-release supply-chain assurance introduced in 0.3.6: SPDX SBOM generation and signed GitHub/Sigstore artifact attestations for the tested EXE and pilot package. The 0.3.7 hotfix allows dependency-metadata restore for the Windows-targeting project on the Linux attestation runner without building the application there.
+Runtime diagnostics and remediation behavior are unchanged from 0.3.5. Version 0.3.8 completes the public-release supply-chain assurance introduced in 0.3.6: SPDX SBOM generation and signed GitHub/Sigstore artifact attestations for the tested EXE and pilot package. The 0.3.8 hotfix allows dependency-metadata restore for the Windows-targeting project on the Linux attestation runner without building the application there.
 
 The application:
 
@@ -36,7 +36,7 @@ The following can run from a normal user context:
 
 `DISM /Online /Cleanup-Image /RestoreHealth` and `SFC /scannow` require UAC. The elevated worker is allowed to run only from the exact canonical path:
 
-`%ProgramFiles%\Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe`
+`%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`
 
 The privileged worker:
 
@@ -83,7 +83,7 @@ The same trusted build event also triggers `Supply Chain Attestations`. That wor
 Attestations for public-repository builds can be verified with GitHub CLI, for example:
 
 ```powershell
-gh attestation verify Gradient-PC-Health-Check.exe --repo bajoicheg/gradient-pc-health-check
+gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
 Existing release tags are never overwritten automatically.
@@ -93,15 +93,15 @@ Existing release tags are never overwritten automatically.
 Prerequisites: Windows 11 x64 and .NET 8 SDK.
 
 ```powershell
-dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
-dotnet build src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -warnaserror
-dotnet run --project src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -- --selftest
+dotnet restore src/G.PcHealthCheck/G.PcHealthCheck.csproj
+dotnet build src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -warnaserror
+dotnet run --project src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -- --selftest
 ```
 
 Single-file publish:
 
 ```powershell
-dotnet publish src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish
+dotnet publish src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish
 ```
 
 ## Contributing
@@ -112,8 +112,8 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md). Public bug reports must use synthetic 
 
 Source code is licensed under the **Apache License 2.0**; see [`LICENSE`](LICENSE).
 
-The Gradient name, G-shield artwork and related branding assets are **not** granted under Apache-2.0 and remain reserved to their respective owner(s). See [`NOTICE`](NOTICE) for the branding exception.
+The G name, G-shield artwork and related branding assets are **not** granted under Apache-2.0 and remain reserved to their respective owner(s). See [`NOTICE`](NOTICE) for the branding exception.
 
 ## Code signing
 
-0.3.7 provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
+0.3.8 provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.

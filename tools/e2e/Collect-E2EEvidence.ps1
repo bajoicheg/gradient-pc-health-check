@@ -43,13 +43,13 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
-$work = Join-Path $env:TEMP "GradientPcHealthCheck-Evidence-$timestamp-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+$work = Join-Path $env:TEMP "GPcHealthCheck-Evidence-$timestamp-$([guid]::NewGuid().ToString('N').Substring(0,8))"
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 
 try {
-    $installedExe = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'Gradient\PCHealthCheck\Gradient-PC-Health-Check.exe'
-    $reportsDir = Join-Path $env:LOCALAPPDATA 'Gradient\PCHealthCheck\Reports'
-    $scenarioRoot = Join-Path $env:TEMP 'GradientPcHealthCheck-E2E'
+    $installedExe = Join-Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFiles)) 'G\PCHealthCheck\G-PC-Health-Check.exe'
+    $reportsDir = Join-Path $env:LOCALAPPDATA 'G\PCHealthCheck\Reports'
+    $scenarioRoot = Join-Path $env:TEMP 'GPcHealthCheck-E2E'
 
     $os = $null
     try {
@@ -106,7 +106,7 @@ try {
     }
 
     $readme = @"
-Gradient PC Health Check — E2E evidence bundle
+G PC Health Check — E2E evidence bundle
 Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss K')
 Machine:   $env:COMPUTERNAME
 User:      $([Security.Principal.WindowsIdentity]::GetCurrent().Name)
@@ -122,7 +122,7 @@ This bundle may contain workstation/user names and diagnostic information. Treat
     Set-Content -LiteralPath (Join-Path $work 'README.txt') -Value $readme -Encoding UTF8
 
     $safeMachine = ($env:COMPUTERNAME -replace '[^A-Za-z0-9_.-]','_')
-    $zip = Join-Path $OutputDirectory "Gradient-PC-Health-Check-E2E-$safeMachine-$timestamp.zip"
+    $zip = Join-Path $OutputDirectory "G-PC-Health-Check-E2E-$safeMachine-$timestamp.zip"
     if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
     Compress-Archive -Path (Join-Path $work '*') -DestinationPath $zip -CompressionLevel Optimal
 
