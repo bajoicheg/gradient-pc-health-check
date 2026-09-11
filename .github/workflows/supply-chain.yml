@@ -100,7 +100,12 @@ jobs:
           echo "Verified EXE SHA-256: $ACTUAL"
 
       - name: Restore dependency metadata
-        run: dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The source project targets Windows. On the Linux attestation runner we restore
+          # only dependency metadata for component detection; no application build occurs here.
+          dotnet restore src/Gradient.PcHealthCheck/Gradient.PcHealthCheck.csproj -p:EnableWindowsTargeting=true
 
       - name: Install pinned Microsoft SBOM Tool
         shell: bash
