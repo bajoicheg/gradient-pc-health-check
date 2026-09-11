@@ -2,13 +2,21 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and a deliberately small set of controlled remediation actions.
 
-Current project version: **0.4.2**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.4.3**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
 > **Security / privacy:** never attach an unreviewed `G-PC-Health-Check-E2E-*.zip` to a public Issue or Pull Request. E2E evidence can contain workstation names, usernames, domain information, hardware/OS details and recent diagnostic reports. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.4.2 adds
+## What 0.4.3 adds
 
-Version 0.4.2 improves diagnostic confidence for disk bottlenecks. A high disk queue no longer creates WARN/CRIT by itself: the assessment now requires sustained queue pressure together with high median disk busy percentage, and incomplete busy/queue telemetry reduces diagnostic coverage instead of being treated as evidence of a bottleneck.
+Version 0.4.3 prevents a false healthy result when a required diagnostic signal is missing. Coverage of 85–95% can still belong to the numeric `HIGH` band, but now always produces an explicit incomplete-data warning rather than `OK`. Missing data does not subtract health-score points, and a confirmed critical finding still takes priority.
+
+Physical-disk health coverage now requires a known status for every discovered disk: one healthy disk cannot mask another disk with unavailable health. An unknown status reduces coverage without being treated as a confirmed disk failure. When the system disk was not measured, the optional CleanTemp recommendation says so instead of claiming that free space is sufficient.
+
+The release adds 22 synthetic regression scenarios to the existing source and published-EXE self-tests. See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md) for the distinction between score, status and diagnostic coverage.
+
+## Diagnostic capabilities
+
+Version 0.4.2 improved diagnostic confidence for disk bottlenecks. A high disk queue no longer creates WARN/CRIT by itself: the assessment requires sustained queue pressure together with high median disk busy percentage, and incomplete busy/queue telemetry reduces diagnostic coverage instead of being treated as evidence of a bottleneck.
 
 The application:
 
@@ -92,7 +100,7 @@ Attestations for public-repository builds can be verified with GitHub CLI, for e
 gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
-Existing release tags are never overwritten automatically.
+Pull-request artifacts are test builds, not published releases, and do not receive this main-branch release attestation. Existing release tags are never overwritten automatically.
 
 ## Building locally
 
@@ -122,4 +130,4 @@ The G name, G-shield artwork and related branding assets are **not** granted und
 
 ## Code signing
 
-0.4.0 provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.
+The release pipeline provides cryptographic build/SBOM provenance, but the Windows PE itself is not yet Authenticode-signed. For managed enterprise deployment, validate the published checksum and GitHub attestation and use an approved software-distribution channel. Authenticode signing and publisher enforcement through AppLocker/WDAC/EDR remain recommended before broad deployment.

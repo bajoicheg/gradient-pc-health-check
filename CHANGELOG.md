@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.3 — Diagnostic completeness
+
+- Any missing weighted diagnostic signal now produces an explicit `WARN / Данные`, even when numeric coverage remains in the `HIGH` band (85–100%).
+- Missing telemetry does not reduce the health score or suppress a confirmed `CRIT` finding.
+- Full physical-disk health coverage requires a known status for every discovered disk; one healthy disk no longer hides another disk with unavailable health.
+- Unknown/blank disk health remains missing data, not evidence of a failed disk.
+- The optional CleanTemp reason explicitly states when system-disk free space was not measured, instead of claiming that space is sufficient.
+- Added 22 synthetic regression scenarios, including individual missing signals, multi-disk health, CRIT priority, recovery after a repeated scan, support-summary consistency and unchanged automated-remediation scope.
+- Updated the assessment-model documentation, including the combined disk busy/queue rule introduced in 0.4.2.
+- No change to the privileged worker, IPC, canonical installation path, elevation behavior or remediation allow-list.
+- Application version: `0.4.3`.
+
 ## 0.4.2 — Disk-pressure confidence
 
 - Disk queue depth no longer produces WARN/CRIT on its own.
