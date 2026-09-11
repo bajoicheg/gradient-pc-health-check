@@ -15,6 +15,7 @@ internal static class SelfTest
             if (TestSupportSummary() != 0) return 71;
             if (TriageRegressionSelfTest.Run() != 0) return 81;
             if (DiskPressureRegressionSelfTest.Run() != 0) return 91;
+            if (CoverageRegressionSelfTest.Run() != 0) return 101;
             return 0;
         }
         catch { return 99; }
