@@ -70,7 +70,8 @@ internal sealed class CommonProblemsCollector
         progress?.Report("Устройства: читаю коды ошибок Plug and Play…");
         try
         {
-            data.Devices = Query("SELECT Name,Present,ConfigManagerErrorCode FROM Win32_PnPEntity WHERE ConfigManagerErrorCode <> 0", item => new DeviceProbe
+            // NULL must reach the assessor as unknown, not disappear behind the WQL filter.
+            data.Devices = Query("SELECT Name,Present,ConfigManagerErrorCode FROM Win32_PnPEntity WHERE ConfigManagerErrorCode <> 0 OR ConfigManagerErrorCode IS NULL", item => new DeviceProbe
             {
                 Name = Convert.ToString(item["Name"]) ?? "", Present = Boolean(item["Present"]), ErrorCode = Number(item["ConfigManagerErrorCode"])
             }, 1024, ct);
