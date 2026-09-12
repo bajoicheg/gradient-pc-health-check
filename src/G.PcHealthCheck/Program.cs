@@ -17,6 +17,7 @@ internal static class Program
             if (result == 0) result = CommonProblemCommandSelfTest.Run();
             if (result == 0) result = SystemDiskSelectionSelfTest.Run();
             if (result == 0) result = PortableElevationSelfTest.Run();
+            if (result == 0) result = ReadOnlyReviewSelfTest.Run();
             Environment.Exit(result);
             return;
         }
