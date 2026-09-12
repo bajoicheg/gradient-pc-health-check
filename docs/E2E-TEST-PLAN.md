@@ -1,211 +1,74 @@
-# G PC Health Check 0.3.5 — E2E test plan
+# G PC Health Check 0.5.2 — Windows 11 pilot
 
-Цель: подтвердить на реальном корпоративном Windows 11 ПК финальный single-file EXE, работу Service Desk UX, непривилегированный `CleanTemp`, trusted-path/UAC boundary для DISM/SFC и корректность evidence.
+## Changed expectation
 
-## 0. Базовый принцип теста
+DISM/SFC are now permitted from any location and EXE name. **Do not use the old test that confirms SFC expecting a Downloads path refusal: that refusal no longer exists.** First test UAC cancellation from a standard-user session. Actual SFC/DISM execution belongs on an approved test workstation only.
 
-Первый пилотный прогон не требует фактического запуска DISM/SFC. Для проверки основной пользовательской цепочки достаточно диагностики и `CleanTemp`. Проверка отказа privileged action из Downloads выполняется без запуска самой команды и без UAC.
+Do not disable AV/EDR, Windows services or execution policy. This pilot does not require installing the app in Program Files.
 
-Положительный тест UAC под отдельной admin-учёткой с фактическим SFC/DISM выполняйте отдельно на согласованном тестовом ПК.
+## 1. Verify the release and launch normally
 
-Не отключайте AV/EDR, WMI, службы Windows и политики. Не запускайте неизвестные helper-скрипты от администратора.
-
-## 1. Исходные условия
-
-- Windows 11 x64, желательно типовой корпоративный образ;
-- обычная пользовательская сессия;
-- тестовый `G-PC-Health-Check.exe` и `.sha256` из одного зелёного `Windows EXE` run;
-- известен SHA-256 артефакта;
-- для отдельного privileged E2E доступна Service Desk admin-учётка.
-
-## 2. Подготовить CleanTemp-сценарий
-
-Из pilot bundle:
+Use the EXE/checksum from one release. Verify the SHA-256 before opening it; after renaming, use the new filename with `Get-FileHash` and compare the same hash value.
 
 ```powershell
-powershell.exe -NoLogo -NoProfile -File .\e2e\Prepare-CleanTempScenario.ps1
+Get-FileHash -LiteralPath '.\G-PC-Health-Check.exe' -Algorithm SHA256
+Get-Content -LiteralPath '.\G-PC-Health-Check.exe.sha256'
 ```
 
-Расширенная проверка reparse point/junction:
+Start the GUI with a normal double click. Confirm that diagnosis does not request UAC, the interface stays responsive and missing telemetry is explicit. Check main metrics, system-volume identity, triage, clipboard and HTML. Windows installed on a non-C volume remains a separate acceptance scenario from 0.5.1.
+
+## 2. User Temp scenario
 
 ```powershell
 powershell.exe -NoLogo -NoProfile -File .\e2e\Prepare-CleanTempScenario.ps1 -IncludeJunctionTest
 ```
 
-Создаются только специальные E2E-файлы внутри пользовательского `%TEMP%`:
-
-- `old-delete-me.txt` — старше порога, должен быть удалён;
-- `fresh-must-stay.txt` — свежий, должен сохраниться;
-- `e2e-manifest.json`;
-- опционально junction на безопасный внешний sentinel, который должен сохраниться.
-
-## 3. Диагностический запуск из Downloads без elevation
-
-1. Запустите EXE обычным двойным кликом из Downloads или распакованного pilot-каталога.
-2. Убедитесь, что UAC не появляется.
-3. Дождитесь диагностики.
-4. Проверьте Health Score, Coverage, CPU/RAM, диск, uptime, TOP CPU/RAM/I/O, физический диск, security product и Windows events.
-5. Откройте HTML-отчёт и визуально сравните данные с GUI.
-
-### Acceptance
-
-- диагностика работает без admin token;
-- GUI остаётся отзывчивым;
-- отсутствующая телеметрия не выглядит как полностью здоровый результат;
-- отчёт создаётся в `%LOCALAPPDATA%\G\PCHealthCheck\Reports`.
-
-## 4. CleanTemp из Downloads — без UAC
-
-1. Выберите только `Очистить старые временные файлы пользователя`.
-2. Нажмите **Применить выбранное**.
-3. Подтвердите список действий.
-
-### Acceptance
-
-- UAC не появляется;
-- выполняется только очистка `%LOCALAPPDATA%\Temp` текущего пользователя;
-- `%WINDIR%\Temp` не является областью действия;
-- после операции автоматически выполняется повторная диагностика;
-- результат `CleanTemp` присутствует в отчёте `До / после`.
-
-## 5. Автопроверка CleanTemp
+Select only user Temp cleanup, confirm it and check that UAC does not appear. Windows Temp/Prefetch and junction targets must not be cleaned. Repeated diagnostics and before/after reporting must finish.
 
 ```powershell
 powershell.exe -NoLogo -NoProfile -File .\e2e\Verify-CleanTempScenario.ps1
 ```
 
-Ожидается:
+Expected: the dedicated old sentinel is deleted; fresh and junction-target sentinels are preserved. The helper's CI smoke is only a simulated sentinel deletion, not actual application remediation.
 
-- `PASS Old Temp sentinel deleted`;
-- `PASS Fresh Temp sentinel preserved`;
-- при `-IncludeJunctionTest`: `PASS Reparse/junction target preserved`.
+## 3. Portable/renamed UAC cancellation
 
-Exit code `0` означает PASS.
+Close the GUI between cases. Copy the same verified EXE to Downloads, a directory with spaces/Unicode, another local volume when available and an optional managed-install directory. Include a renamed EXE such as `Проверка ПК (1).exe`; compare hashes after copying.
 
-## 6. Trusted-path gate для privileged remediation
+For each case, launch normally from a standard-user session, select only SFC and confirm the app's action dialog. Expected: UAC is reached without a directory/name refusal. **Cancel UAC**; SFC must not run, the GUI must explain cancellation and remain usable. A second GUI or an orphan worker must not remain. If the test process is already elevated, there may be no UAC prompt; do not use that session for this cancellation test.
 
-Оставив GUI запущенным из Downloads:
+## 4. Approved positive UAC test
 
-1. Снимите остальные галочки.
-2. Выберите `SFC /scannow` **только для проверки gate**.
-3. Нажмите **Применить выбранное** и подтвердите список.
+On an approved Windows 11 test machine, repeat with SFC and approve UAC, including a separate Service Desk admin identity in one case. Verify that the elevated worker is the same renamed EXE at the same actual location, the parent receives results and the before/after report contains the command exit code. Run DISM only when appropriate for the test machine; it is not necessary simply to verify path portability.
 
-### Acceptance
+If launching from a network/mapped path, independently check that the administrative identity can read it. Windows policy/access failures are not bypassed by the application. A synthetic UNC launch-contract test does not prove network access in a real domain.
 
-- UAC не появляется;
-- SFC не запускается;
-- приложение сообщает, что DISM/SFC разрешены только для проверенной копии в `%ProgramFiles%\G\PCHealthCheck`;
-- GUI не падает и позволяет продолжить работу.
+## 5. Combined actions and elevated-GUI guard
 
-После проверки снимите галочку SFC.
+From a normal GUI, select SFC plus user Temp cleanup. UAC belongs to the worker; `CleanTemp` must not be included in its action list and must run in the parent user's context after the worker returns. Cancelled UAC must not partially execute the combined selection.
 
-## 7. Разместить проверенный EXE в canonical Program Files path
+Separately start the GUI elevated and select only `CleanTemp`: it must still refuse privileged user-Temp traversal and request a normal relaunch. No directory/name restriction is reintroduced for DISM/SFC.
 
-Для corporate pilot предпочтительно централизованное software deployment. Для разового теста допускается контролируемое ручное размещение администратором.
+## 6. Common-problem and interface regression
 
-До и после копирования сравните SHA-256:
+Check main/common-problem windows at 100/150/200% DPI, keyboard navigation and long device names. Repeat local network/printer/PnP checks, cancellation and HTML/JSON export. Confirm that configuration is not presented as proof of reachability or a resolved user symptom. Do not enable devices, change corporate network settings or restart Spooler automatically.
+
+## 7. Evidence and cleanup
+
+Pass the actual executable path, including a renamed filename:
 
 ```powershell
-Get-FileHash .\G-PC-Health-Check.exe -Algorithm SHA256
-Get-Content .\G-PC-Health-Check.exe.sha256
-Get-FileHash "$env:ProgramFiles\G\PCHealthCheck\G-PC-Health-Check.exe" -Algorithm SHA256
-```
-
-### Acceptance
-
-- все хэши совпадают;
-- `G` и `PCHealthCheck` — обычные каталоги, не junction/symlink/reparse point.
-
-## 8. Canonical copy как standard user
-
-1. Запустите `%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe` обычным двойным кликом.
-2. Убедитесь, что сама диагностика не требует UAC.
-3. `CleanTemp` по-прежнему должен выполняться без UAC.
-
-## 9. UAC cancel для SFC/DISM
-
-На canonical copy:
-
-1. Выберите только `SFC /scannow`.
-2. Нажмите **Применить выбранное**.
-3. В UAC нажмите Cancel.
-
-### Acceptance
-
-- SFC не выполняется;
-- программа показывает понятное сообщение об отмене;
-- исходный GUI остаётся рабочим.
-
-## 10. Отдельный positive UAC test
-
-Этот шаг выполняется на согласованном тестовом ПК, где допустим SFC.
-
-1. Снова выберите только `SFC /scannow`.
-2. В UAC введите отдельную Service Desk admin-учётку.
-3. Дождитесь завершения и повторной диагностики.
-
-### Acceptance
-
-- elevated worker запускается именно из canonical Program Files path;
-- standard-user GUI получает результат через named pipe;
-- нет второго GUI или зависшего worker;
-- exit code и результат SFC отражены во вкладке `До / после` и verification report.
-
-DISM можно проверять отдельно только при наличии диагностического основания.
-
-## 11. Комбинированный boundary test
-
-На canonical copy можно выбрать одновременно `CleanTemp` и `SFC`.
-
-Ожидаемое поведение:
-
-- UAC относится только к SFC;
-- `CleanTemp` не передаётся elevated worker-у;
-- после завершения privileged worker `CleanTemp` выполняется исходным standard-user процессом;
-- в итоговом batch присутствуют оба результата.
-
-Если UAC отменён, `CleanTemp` в этом комбинированном сценарии также не должен выполняться до отмены.
-
-## 12. Поведение при ручном Run as administrator
-
-Запустите приложение через **Run as administrator** только как отдельный negative test и выберите `CleanTemp`.
-
-### Acceptance
-
-`CleanTemp` fail closed с сообщением, что очистка пользовательского Temp намеренно не выполняется из elevated-процесса. Это защищает user-controlled directory tree от обхода с admin token.
-
-## 13. Собрать evidence
-
-```powershell
-powershell.exe -NoLogo -NoProfile -File .\e2e\Collect-E2EEvidence.ps1 -SourceExe .\G-PC-Health-Check.exe
-```
-
-Evidence ZIP может содержать имя ПК/пользователя и диагностические сведения, поэтому является внутренним Service Desk artifact.
-
-Проверьте evidence:
-
-```powershell
-powershell.exe -NoLogo -NoProfile -File .\e2e\Analyze-E2EEvidence.ps1 -EvidenceZip <path-to-zip>
-```
-
-## 14. Очистить E2E test data
-
-```powershell
+powershell.exe -NoLogo -NoProfile -File .\e2e\Collect-E2EEvidence.ps1 -SourceExe '.\Проверка ПК (1).exe'
+powershell.exe -NoLogo -NoProfile -File .\e2e\Analyze-E2EEvidence.ps1 -EvidenceZip '<path-to-zip>'
 powershell.exe -NoLogo -NoProfile -File .\e2e\Cleanup-E2EScenario.ps1
 ```
 
-Cleanup удаляет только фиксированные E2E paths.
+The evidence tooling retains a legacy optional comparison against a Program Files copy. An absent or older installed copy can therefore produce an analyzer warning/mismatch; it is not a requirement to install the portable release and must not substitute for comparing the actual source EXE with its release checksum. Record portable UAC/rename outcomes explicitly in the pilot notes.
 
-## 15. Release gate
+Evidence may contain host/user/domain/device/network details and must not be posted publicly without review. Cleanup removes only dedicated E2E test paths.
 
-0.3.5 допускается к публикации после выполнения минимум следующих условий:
+## Acceptance boundary
 
-- финальный PR SHA имеет зелёные `Windows EXE` и `E2E Evidence Analyzer`;
-- standard-user scan из Downloads — PASS;
-- `CleanTemp` из Downloads без UAC — PASS;
-- old/fresh/junction CleanTemp checks — PASS;
-- SFC/DISM из Downloads блокируются до UAC — PASS;
-- canonical Program Files copy имеет SHA-256, совпадающий с CI artifact;
-- UAC cancel — PASS;
-- для расширенного пилота: separate-admin positive UAC test — PASS;
-- GitHub Release публикуется вручную только из `run_id` успешного `Windows EXE` push-run на `main`.
+Automated release gates: successful exact PR/main builds, existing regressions, 20 portable-elevation scenarios, 32 published-EXE process checks, version/checksum and pilot validation. The process matrix intentionally does not execute OS remediation or interact with UAC.
+
+Workstation acceptance: normal diagnosis, old/fresh/junction Temp checks, renamed Downloads UAC-cancel, approved alternate-admin positive UAC and combined-action results. Record each as PASS/FAIL/NOT RUN. A published CI-tested release does not itself certify this manual pilot or Authenticode signing.
