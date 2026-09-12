@@ -42,6 +42,7 @@ internal static class Program
         using var main = new MainForm();
         CommonProblemsMenu.Attach(main);
         ReadOnlyReviewMenu.Attach(main);
+        ResourceProbeMenu.Attach(main);
         Application.Run(main);
     }
 }
