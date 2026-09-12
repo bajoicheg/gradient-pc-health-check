@@ -32,6 +32,7 @@ internal static class Program
                 var integration = IncidentReviewIntegrationSelfTest.Run();
                 result = behavior != 0 ? behavior : integration;
             }
+            if (result == 0) result = PerformanceSessionSelfTest.Run();
             Environment.Exit(result);
             return;
         }
