@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 — Applications using a selected file
+
+- Adds an idle-on-open Analysis window using Windows Restart Manager for one explicitly selected ordinary local file.
+- Preserves RM application/service names separately from executable metadata verified by exact PID and process creation time on a query-only handle.
+- Adds choose/paste path, repeat/stop, literal search, numeric sorting, details, elapsed progress, clipboard and full current/previous-attempt HTML/JSON exports.
+- Distinguishes an unavailable or cancelled query from a successful empty result; neither is presented as proof that the file can be deleted or renamed.
+- Bounds list retries to four and records to 1024; validates returned counts against capacity and attempts session cleanup on every exit after successful start.
+- Fixes all four source-review findings: invalid-record PID-cache poisoning, reserved DOS path components, lost native cancellation code and unrealistic zero-capacity fake responses/service count validation.
+- Keeps native service rows separate even when they share a process. No file-content read/change, forced handle closure, process termination, service restart or privilege adjustment is added.
+- Adds 44 behavior, six native/UI/export and 20 follow-up acceptance cases. Previous suites and the 32-case portable worker matrix remain enabled.
+- Preserves arbitrary executable location/name, existing UAC/context/Temp rules, health model, packages and workflow permissions.
+- Version `0.13.0`, FileVersion `0.13.0.0`. [Scope and pilot checks](docs/releases/0.13.0.md). [Observed validation](docs/releases/0.13.0-validation.md).
+
 ## 0.12.0 — TCP/UDP endpoint and process review
 
 - Adds an idle-on-open Analysis window for local TCP4/TCP6/UDP4/UDP6 owner-PID tables, addresses, ports and native states.
