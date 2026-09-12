@@ -11,6 +11,10 @@ internal sealed class TempCandidate
 
 internal sealed class TempPreviewSnapshot
 {
+    public ExecutionContextInfo? ExecutionContext { get; set; }
+    public string TargetAccount { get; set; } = "";
+    public string TargetSid { get; set; } = "";
+    public string CleanupAvailability { get; set; } = "Unknown";
     public string Root { get; set; } = "";
     public int OlderThanDays { get; set; }
     public DateTime Cutoff { get; set; }
@@ -50,6 +54,7 @@ internal sealed class StartupReviewEntry
 
 internal sealed class StartupReviewSnapshot
 {
+    public ExecutionContextInfo? ExecutionContext { get; set; }
     public DateTime CollectedAt { get; set; }
     public string Account { get; set; } = "";
     public ReviewCollectionState State { get; set; } = ReviewCollectionState.Unavailable;
