@@ -26,6 +26,7 @@ internal static class Program
                 var cancellation = ResourceCancellationSelfTest.Run();
                 result = behavior != 0 ? behavior : integration != 0 ? integration : cancellation;
             }
+            if (result == 0) result = IncidentReviewSelfTest.Run();
             Environment.Exit(result);
             return;
         }
