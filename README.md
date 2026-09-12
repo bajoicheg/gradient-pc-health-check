@@ -2,9 +2,17 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable findings, before/after reporting and controlled remediation.
 
-Current project version: **0.12.0**. A self-contained single-file `G-PC-Health-Check.exe`; no installation is required. Portable copies may use any folder and filename.
+Current project version: **0.13.0**. A self-contained single-file `G-PC-Health-Check.exe`; no installation is required. Portable copies may use any folder and filename.
 
 > **Privacy:** review exports before sharing. Account names/SIDs, profile and file paths, commands, events, device identifiers, resource addresses and notes can be sensitive. Search is not redaction. See [`SECURITY.md`](SECURITY.md).
+
+## New in 0.13.0 — applications using a file
+
+**Анализ → Кто использует файл…** investigates one explicitly chosen ordinary local file through Windows Restart Manager. It separates native application/service names from executable metadata verified using PID and exact process creation time. A reused or unavailable PID stays explicit; a successful empty list is not proof that the file is unlocked or deletable.
+
+The window opens idle and offers choose/paste path, repeat/stop, literal search, numeric sorting, row details, elapsed progress, clipboard and whole-attempt HTML/JSON exports with current/previous targets and account context. Collection has four bounded list attempts and a 1024-record cap, preserves native cancellation codes and attempts RM session cleanup on every exit after successful start. Reserved DOS device names are excluded from the selected data-file path; the utility's portable executable-name policy is unchanged.
+
+No user-file content read/change, forced handle closure, process termination, service restart, elevation or new repair action. RM owns temporary registration/session state; this is not full system-handle enumeration. [Scope, interpretation, validation and pilot checks](docs/releases/0.13.0.md).
 
 ## New in 0.12.0 — network endpoints and processes
 
@@ -37,6 +45,7 @@ Startup review still reads HKCU/personal Startup of the **process account**. Rai
 | Место по папкам… | Own/subtree logical sizes, counts, immediate folders and largest 200 files | Default 200000 entries / 20000 folders / 120 seconds; no deletion or file-content reads. [0.10.0](docs/releases/0.10.0.md) |
 | Подробности накопителей… | Physical-disk properties and explicitly associated Windows reliability counters | Missing is not zero; consumed wear, not remaining health; not full raw SMART or a surface test. [0.10.0](docs/releases/0.10.0.md) |
 | Сетевые соединения и порты (TCP/UDP)… | Local owner-PID tables, checked process-name attribution and qualified snapshot differences | No probe/reverse DNS or connection/process changes; full retained-snapshot export. [0.12.0](docs/releases/0.12.0.md) |
+| Кто использует файл… | Restart Manager application/service evidence for one selected local file, with checked executable metadata | No forced unlocking or termination; failed/empty results stay distinct. [0.13.0](docs/releases/0.13.0.md) |
 
 Read-only tools open idle and provide explicit collection, progress, cancellation, details and local reports. Export before replacing an in-memory result. HTML/JSON preserve the complete collected snapshot, not only a search filter. Permissions, source limits and unavailable values remain meaningful; no provider is guaranteed to return promptly. Folder sizes are logical, nested totals overlap and hard links count per name. Network/cloud paths and native name resolution may generate OS traffic.
 

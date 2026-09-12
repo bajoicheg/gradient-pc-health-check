@@ -59,6 +59,13 @@ internal static class Program
                 var integration = EndpointReviewIntegrationSelfTest.Run();
                 result = behavior != 0 ? behavior : integration;
             }
+            if (result == 0)
+            {
+                var behavior = FileUseSelfTest.Run();
+                var integration = FileUseIntegrationSelfTest.Run();
+                var review = FileUseReviewSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : review;
+            }
             Environment.Exit(result);
             return;
         }
@@ -81,6 +88,7 @@ internal static class Program
         PerformanceSessionMenu.Attach(main);
         StorageReviewMenu.Attach(main);
         EndpointReviewMenu.Attach(main);
+        FileUseMenu.Attach(main);
         Application.Run(main);
     }
 }
