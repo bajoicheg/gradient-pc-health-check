@@ -105,6 +105,8 @@ internal sealed class WindowsDiskDetailsSource : IPhysicalDiskDetailsSource
 
     private static System.Management.EnumerationOptions Options() => new()
     {
+        // A SELECT projection must retain the original instance path for GetRelated.
+        EnsureLocatable = true,
         ReturnImmediately = true, Rewindable = false, BlockSize = 1, Timeout = TimeSpan.FromSeconds(3)
     };
     private static object? Value(ManagementBaseObject item, string name)
