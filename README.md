@@ -2,11 +2,19 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and controlled remediation.
 
-Current project version: **0.7.0**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.8.0**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
-> **Security / privacy:** never publish unreviewed diagnostic reports. Evidence may contain workstation/user/domain names, file paths, startup commands, target hostnames and network addresses. See [`SECURITY.md`](SECURITY.md).
+> **Security / privacy:** never publish unreviewed diagnostic reports. Evidence may contain workstation/user/domain names, event messages, file paths, process/startup commands, target hostnames and network addresses. Search filters are not report redaction. See [`SECURITY.md`](SECURITY.md).
 
-## New in 0.7.0 — diagnose one network resource
+## New in 0.8.0 — investigate an incident
+
+Open **Анализ → События за время сбоя…** to collect local Application/System events for an explicit time interval. Search the collected provider/message data, select a channel/Event ID/severity, inspect full available message details, and export evidence. The window opens idle; the default preceding hour can be changed to an interval of up to seven days. Local input times become explicit UTC query bounds. The GUI keeps at most 1000 newest records per log; partial sources, denied access, missing messages and truncation are visible. Search does not inspect records outside the collected subset.
+
+Open **Анализ → Подробности процессов…** for a read-only current snapshot: name, PID/parent PID, start time, executable path, raw command line, session, working set, thread/handle counts and unavailable-field warnings. Select a row and **Проверить владельца** for an identity-checked GetOwner request. PID and exact creation time are verified before and after the request; reused/exited/unverified identities cannot inherit an earlier process owner's result. Commands are not executed and processes are not modified.
+
+Both windows offer repeat/cancel, elapsed progress, typed numeric columns, full details, clipboard and non-overwriting HTML/JSON exports. Exports preserve the full snapshot and warnings despite search filters. Historical event emitter PIDs are not automatically associated with current processes; temporal coincidence is not root-cause proof. Complete collection is not a health verdict. Providers may exceed cooperative time/cancellation limits. See [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md) for exact scope, test evidence and Windows 11 pilot checks. No repairs, dependencies or portable/UAC rules are changed.
+
+## Resource diagnostics (0.7.0)
 
 Open **Анализ → Проверить доступность ресурса (DNS/TCP)…**. Enter one hostname or IPv4/IPv6 address and one TCP port, explicitly allow outbound diagnostic connections, then select **Проверить / повторить**. Opening the window makes no network requests. Changing the target/port clears consent; another run also requires confirmation through the checkbox. Internationalized names are normalized; URLs, credentials, paths and ranges are rejected.
 
@@ -14,7 +22,7 @@ The session separates system name resolution from each TCP attempt, displays res
 
 Defaults: DNS timeout 5 seconds; TCP 3 seconds per address (GUI range 1–10); at most eight distinct usable addresses, in resolver order. Mixed results, skipped addresses and cancellation remain explicit. TCP success is not proof of TLS, HTTP, authentication or application health. No application payload is sent. Repeat/cancel, current/previous attempts, clipboard and unique-folder HTML/JSON exports are included. Different targets are not presented as a before/after repair comparison.
 
-The session never resets networking, changes DNS/VPN/proxy or runs repairs. Existing Health Score and Coverage are unchanged. See [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md) for tests, sources and pilot limits. This implements the next scoped network item from issue #26, not its later event, performance, hardware or full TCPView-style process inventory items.
+The session never resets networking, changes DNS/VPN/proxy or runs repairs. Existing Health Score and Coverage are unchanged. See [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md) for tests, sources and pilot limits. It is not a full TCPView-style connection/process inventory.
 
 ## Read-only inspections (0.6.0)
 
@@ -58,7 +66,7 @@ PR checks precede merge. Successful main builds trigger release publication and 
 gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
-PR builds are not releases. Hosted Windows Server tests, including loopback-only network integration, do not replace managed Windows 11 VPN/proxy/DNS, GUI/DPI/UAC and real remediation testing. Provider cancellation is not a guarantee that every OS-internal operation immediately stops. See [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md) and version notes.
+PR builds are not releases. Hosted Windows Server tests, including local read-only event/WMI and loopback-only network integration, do not replace managed Windows 11 VPN/proxy/DNS, GUI/DPI/UAC and real remediation testing. Provider cancellation is not a guarantee that every OS-internal operation immediately stops. See [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md) and version notes.
 
 ## Building locally
 

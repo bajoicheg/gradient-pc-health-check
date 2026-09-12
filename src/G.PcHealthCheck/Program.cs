@@ -26,6 +26,12 @@ internal static class Program
                 var cancellation = ResourceCancellationSelfTest.Run();
                 result = behavior != 0 ? behavior : integration != 0 ? integration : cancellation;
             }
+            if (result == 0)
+            {
+                var behavior = IncidentReviewSelfTest.Run();
+                var integration = IncidentReviewIntegrationSelfTest.Run();
+                result = behavior != 0 ? behavior : integration;
+            }
             Environment.Exit(result);
             return;
         }
@@ -44,6 +50,7 @@ internal static class Program
         CommonProblemsMenu.Attach(main);
         ReadOnlyReviewMenu.Attach(main);
         ResourceProbeMenu.Attach(main);
+        IncidentReviewMenu.Attach(main);
         Application.Run(main);
     }
 }
