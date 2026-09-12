@@ -53,6 +53,7 @@ internal static class Program
                 var actions = ExecutionContextActionSelfTest.Run();
                 result = behavior != 0 ? behavior : integration != 0 ? integration : actions;
             }
+            if (result == 0) result = EndpointReviewSelfTest.Run();
             Environment.Exit(result);
             return;
         }
