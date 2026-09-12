@@ -23,7 +23,8 @@ internal static class Program
             {
                 var behavior = ResourceProbeSelfTest.Run();
                 var integration = ResourceProbeIntegrationSelfTest.Run();
-                result = behavior != 0 ? behavior : integration;
+                var cancellation = ResourceCancellationSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : cancellation;
             }
             Environment.Exit(result);
             return;
