@@ -30,6 +30,7 @@ public sealed class Thresholds
 
 public sealed class SystemInfo
 {
+    public ExecutionContextInfo? ExecutionContext { get; set; }
     public string ComputerName { get; set; } = Environment.MachineName;
     public string UserName { get; set; } = Environment.UserName;
     public string Domain { get; set; } = "";
@@ -202,6 +203,8 @@ public sealed class ScanResult
 
 public sealed class RemediationActionResult
 {
+    public ExecutionContextInfo? ExecutionContext { get; set; }
+    public string TargetScope { get; set; } = "";
     public string Id { get; set; } = "";
     public bool Success { get; set; }
     public int? ExitCode { get; set; }
@@ -218,8 +221,11 @@ public sealed class RemediationBatchResult
     public string SessionId { get; set; } = "";
     public DateTime StartedAt { get; set; }
     public DateTime FinishedAt { get; set; }
+    // Legacy field: the batch contains elevated execution. Use each action's context for attribution.
     public bool Elevated { get; set; }
     public List<RemediationActionResult> Actions { get; set; } = [];
+    public bool? MixedExecutionContexts => Actions.Count == 0 || Actions.Any(x => x.ExecutionContext is null) ? null
+        : Actions.Select(x => (x.ExecutionContext!.ProcessSid, x.ExecutionContext.IsElevated, x.ExecutionContext.HasAdministratorToken)).Distinct().Count() > 1;
 }
 
 public sealed class VerificationResult
