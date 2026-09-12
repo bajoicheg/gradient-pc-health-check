@@ -65,6 +65,7 @@ internal static class Program
         ResourceProbeMenu.Attach(main);
         IncidentReviewMenu.Attach(main);
         PerformanceSessionMenu.Attach(main);
+        StorageReviewMenu.Attach(main);
         Application.Run(main);
     }
 }
