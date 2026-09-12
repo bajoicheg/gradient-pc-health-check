@@ -36,7 +36,8 @@ internal static class Program
             {
                 var behavior = PerformanceSessionSelfTest.Run();
                 var integration = PerformanceSessionUiSelfTest.Run();
-                result = behavior != 0 ? behavior : integration;
+                var timing = PerformanceSessionTimingSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : timing;
             }
             Environment.Exit(result);
             return;
