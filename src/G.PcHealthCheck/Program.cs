@@ -39,7 +39,12 @@ internal static class Program
                 var timing = PerformanceSessionTimingSelfTest.Run();
                 result = behavior != 0 ? behavior : integration != 0 ? integration : timing;
             }
-            if (result == 0) result = StorageReviewSelfTest.Run();
+            if (result == 0)
+            {
+                var behavior = StorageReviewSelfTest.Run();
+                var integration = StorageReviewIntegrationSelfTest.Run();
+                result = behavior != 0 ? behavior : integration;
+            }
             Environment.Exit(result);
             return;
         }
