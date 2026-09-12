@@ -28,6 +28,8 @@ internal static class ReviewReport
         if (snapshot is TempPreviewSnapshot t)
         {
             sb.AppendLine($"{State(t.State)} · снимок {t.CompletedAt:dd.MM.yyyy HH:mm:ss zzz}");
+            sb.AppendLine($"Чей Temp: {ExecutionPolicy.Value(t.TargetAccount)}; SID: {ExecutionPolicy.Value(t.TargetSid)}.");
+            sb.AppendLine(ExecutionPolicy.Describe(t.ExecutionContext));
             sb.AppendLine("Область: " + (t.Root.Length == 0 ? "не определена" : t.Root));
             sb.AppendLine($"Правило: LastWriteTime < {t.Cutoff:dd.MM.yyyy HH:mm:ss zzz} (старше {t.OlderThanDays} дней).");
             if (t.State == ReviewCollectionState.Unavailable) sb.AppendLine("Кандидаты и объём: — (оценка недоступна).");
@@ -35,7 +37,9 @@ internal static class ReviewReport
             sb.AppendLine($"Просмотрено записей: {t.VisitedEntries:N0}; пропущено ссылок: {t.SkippedLinks:N0}; ошибок: {t.Errors:N0}.");
             sb.AppendLine($"В таблице: {t.LargestFiles.Count} крупнейших из {t.CandidateFiles:N0} кандидатов. Лимиты: {t.MaxEntries:N0} записей / {t.TimeLimitSeconds:0.#} с.");
             sb.AppendLine("Это оценка, не обещание освободить указанный объём. Содержимое не читалось, файлы не удалялись. При очистке отбор выполняется заново; файл может измениться или оказаться заблокированным. Размеры логические, не занятое место на носителе.");
-            sb.AppendLine("Для применения: закройте это окно и выберите CleanTemp в рекомендациях главного окна. Список крупнейших файлов не является отдельным выбором для удаления.");
+            sb.AppendLine(t.CleanupAvailability == "Ready"
+                ? "Очистка доступна отдельным подтверждаемым действием CleanTemp в главном окне. Список крупнейших файлов не является планом удаления."
+                : "Для удаления откройте программу обычным запуском от имени пользователя этого сеанса. Возможность чтения с повышением не означает возможность очистки в том же контексте.");
             foreach (var issue in t.Issues) sb.AppendLine("! " + issue);
             if (t.OmittedIssues > 0) sb.AppendLine($"Ещё сообщений: {t.OmittedIssues:N0}.");
         }
@@ -43,6 +47,7 @@ internal static class ReviewReport
         {
             sb.AppendLine($"{State(s.State)} · снимок {s.CollectedAt:dd.MM.yyyy HH:mm:ss zzz}");
             sb.AppendLine($"Аккаунт процесса: {s.Account}; записей: {s.Entries.Count}; источников: {s.Sources.Count}.");
+            sb.AppendLine(ExecutionPolicy.Describe(s.ExecutionContext));
             sb.AppendLine(StartupReviewService.ScopeNote);
             sb.AppendLine("Команды показаны без запуска и подстановки переменных. Состояние включения: не определено; подпись, репутация и влияние на загрузку не проверялись.");
             foreach (var source in s.Sources) sb.AppendLine($"Источник: {source.Name} | {source.Scope} | {State(source.State)} | записей: {source.Items} | {source.Detail}");

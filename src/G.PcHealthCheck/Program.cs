@@ -46,6 +46,13 @@ internal static class Program
                 var completion = StorageCompletionSelfTest.Run();
                 result = behavior != 0 ? behavior : integration != 0 ? integration : completion;
             }
+            if (result == 0)
+            {
+                var behavior = ExecutionContextSelfTest.Run();
+                var integration = ExecutionContextIntegrationSelfTest.Run();
+                var actions = ExecutionContextActionSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : actions;
+            }
             Environment.Exit(result);
             return;
         }

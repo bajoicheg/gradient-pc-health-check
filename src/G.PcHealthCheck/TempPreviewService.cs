@@ -16,15 +16,24 @@ internal static class TempPreviewService
     public static TempPreviewSnapshot CollectUser(int days, CancellationToken ct, IProgress<string>? progress = null)
     {
         ct.ThrowIfCancellationRequested();
-        var now = DateTime.Now;
-        if (DiagnosticsService.IsAdministrator())
-            return Unavailable(days, now, "CleanTemp не выполняется из повышенного процесса. Откройте приложение обычным пользователем для предпросмотра той же области очистки.");
-        progress?.Report("Определяю профиль тем же способом, что и CleanTemp…");
-        var profile = DiagnosticsService.GetInteractiveUserProfile();
+        progress?.Report("Определяю пользователя и профиль текущего сеанса…");
+        var context = ExecutionContextService.Capture();
+        return CollectForContext(days, context, ct, progress);
+    }
+
+    internal static TempPreviewSnapshot CollectForContext(int days, ExecutionContextInfo context, CancellationToken ct, IProgress<string>? progress)
+    {
+        if (days is < 1 or > 30) throw new ArgumentOutOfRangeException(nameof(days));
         ct.ThrowIfCancellationRequested();
-        if (string.IsNullOrWhiteSpace(profile))
-            return Unavailable(days, now, "Не удалось определить профиль интерактивного пользователя. Другой каталог Temp не подставлен.");
-        return Scan(Path.Combine(profile, "AppData", "Local", "Temp"), days, DateTime.Now, ct, progress: progress);
+        var root = ExecutionPolicy.PreviewRoot(context);
+        var result = root is null
+            ? Unavailable(days, DateTime.Now, ExecutionPolicy.For("TempPreview", context).Reason)
+            : Scan(root, days, DateTime.Now, ct, progress: progress);
+        result.ExecutionContext = context;
+        result.TargetAccount = context.SessionAccount;
+        result.TargetSid = context.SessionSid;
+        result.CleanupAvailability = ExecutionPolicy.For("CleanTemp", context).State;
+        return result;
     }
 
     private static TempPreviewSnapshot Unavailable(int days, DateTime now, string reason) => new()
@@ -92,8 +101,7 @@ internal static class TempPreviewService
             var directory = stack.Pop();
             try
             {
-                // Recheck queued directories. This is best-effort read-only observation,
-                // not a race-proof filesystem transaction or a reusable deletion plan.
+                // Read-only observation, not a filesystem transaction or a deletion plan.
                 if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) { result.SkippedLinks++; continue; }
                 using var iterator = Directory.EnumerateFileSystemEntries(directory, "*", new System.IO.EnumerationOptions
                 { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = 0, ReturnSpecialDirectories = false }).GetEnumerator();
