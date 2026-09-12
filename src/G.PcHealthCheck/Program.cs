@@ -88,6 +88,7 @@ internal static class Program
         PerformanceSessionMenu.Attach(main);
         StorageReviewMenu.Attach(main);
         EndpointReviewMenu.Attach(main);
+        FileUseMenu.Attach(main);
         Application.Run(main);
     }
 }

@@ -50,7 +50,7 @@ internal static class FileUseSelfTest
         Test("error list rows are not trusted", () =>
         { var f = new Fake(); f.Batches.Enqueue(new(5, 1, 1, 0, [Row()])); var s = Collect(f); Require(s.ErrorCode == 5 && !s.ListCompleted && s.Processes.Count == 0 && f.EndCalls == 1, "Failed output treated as valid."); });
         Test("success count mismatch rejected", () =>
-        { var f = new Fake(); f.Batches.Enqueue(new(0, 2, 2, 0, [Row()])); var s = Collect(f); Require(!s.ListCompleted && s.State == "Unavailable" && f.EndCalls == 1, "Malformed count accepted."); });
+        { var f = new Fake(); f.Batches.Enqueue(new(234, 2, 0, 0, [])); f.Batches.Enqueue(new(0, 2, 2, 0, [Row()])); var s = Collect(f); Require(!s.ListCompleted && s.State == "Unavailable" && f.EndCalls == 1, "Malformed count accepted."); });
         Test("start failure does not end unknown session", () =>
         { var f = new Fake { StartCode = 353 }; var s = Collect(f); Require(s.State == "Unavailable" && s.ErrorCode == 353 && f.EndCalls == 0 && f.Capacities.Count == 0, "Start failure mishandled."); });
         Test("registration failure ends session", () =>
@@ -96,8 +96,13 @@ internal static class FileUseSelfTest
         public uint EndSession(uint handle) { EndCalls++; return EndCode; }
         public FileUseBatch ReadList(uint handle, int capacity)
         {
-            Capacities.Add(capacity); OnRead?.Invoke(); if (ReadFailure) throw new IOException();
-            return AlwaysMore ? new(234, (uint)capacity + 1, 0, 0, []) : Batches.Count > 0 ? Batches.Dequeue() : new(0, 1, 1, 0, [Row()]);
+            Capacities.Add(capacity); if (ReadFailure) throw new IOException();
+            // Mirror RmGetList: no nonempty successful output into a zero-capacity buffer.
+            var batch = AlwaysMore ? new FileUseBatch(234, (uint)capacity + 1, 0, 0, [])
+                : Batches.Count > 0 ? Batches.Dequeue()
+                : capacity == 0 ? new FileUseBatch(234, 1, 0, 0, []) : new FileUseBatch(0, 1, 1, 0, [Row()]);
+            if (batch.Code == 0) OnRead?.Invoke();
+            return batch;
         }
         public FileUseIdentity? ReadIdentity(uint pid) => IdentityFailure ? throw new Win32Exception(5) : new(pid, Start, @"C:\Apps\Synthetic.exe");
     }
