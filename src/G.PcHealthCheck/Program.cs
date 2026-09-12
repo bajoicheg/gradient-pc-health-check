@@ -19,6 +19,13 @@ internal static class Program
             if (result == 0) result = PortableElevationSelfTest.Run();
             if (result == 0) result = ReadOnlyReviewSelfTest.Run();
             if (result == 0) result = ReadOnlyReviewUiSelfTest.Run();
+            if (result == 0)
+            {
+                var behavior = ResourceProbeSelfTest.Run();
+                var integration = ResourceProbeIntegrationSelfTest.Run();
+                var cancellation = ResourceCancellationSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : cancellation;
+            }
             Environment.Exit(result);
             return;
         }
@@ -36,6 +43,7 @@ internal static class Program
         using var main = new MainForm();
         CommonProblemsMenu.Attach(main);
         ReadOnlyReviewMenu.Attach(main);
+        ResourceProbeMenu.Attach(main);
         Application.Run(main);
     }
 }
