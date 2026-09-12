@@ -39,6 +39,13 @@ internal static class Program
                 var timing = PerformanceSessionTimingSelfTest.Run();
                 result = behavior != 0 ? behavior : integration != 0 ? integration : timing;
             }
+            if (result == 0)
+            {
+                var behavior = StorageReviewSelfTest.Run();
+                var integration = StorageReviewIntegrationSelfTest.Run();
+                var completion = StorageCompletionSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : completion;
+            }
             Environment.Exit(result);
             return;
         }
@@ -59,6 +66,7 @@ internal static class Program
         ResourceProbeMenu.Attach(main);
         IncidentReviewMenu.Attach(main);
         PerformanceSessionMenu.Attach(main);
+        StorageReviewMenu.Attach(main);
         Application.Run(main);
     }
 }
