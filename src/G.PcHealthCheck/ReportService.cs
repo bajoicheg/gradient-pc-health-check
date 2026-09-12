@@ -77,10 +77,15 @@ public sealed class ReportService
         Hero(sb, scan.Assessment.Score, scan.Assessment.Status, d.System.ComputerName + " · " + d.System.UserName + " · " + d.System.Model);
         Triage(sb, scan);
         Metrics(sb, scan);
+        ContextBlock(sb, "Контекст диагностики", d.System.ExecutionContext);
         Findings(sb, scan.Assessment.Findings, "Выводы");
-        sb.Append("<section><h2>Действия Service Desk</h2><table><thead><tr><th>Тип</th><th>Действие</th><th>Причина</th><th>Авто</th><th>Admin</th><th>Риск</th></tr></thead><tbody>");
+        sb.Append("<section><h2>Действия Service Desk</h2><table><thead><tr><th>Тип</th><th>Действие</th><th>Причина</th><th>Авто</th><th>Admin</th><th>Риск</th><th>Доступность при сборе</th></tr></thead><tbody>");
         foreach (var a in scan.Actions)
-            sb.Append("<tr><td>").Append(H(a.Kind)).Append("</td><td>").Append(H(a.Title)).Append("</td><td>").Append(H(a.Reason)).Append("</td><td>").Append(a.CanAutomate ? "Да" : "Нет").Append("</td><td>").Append(a.RequiresAdmin ? "Да" : "Нет").Append("</td><td>").Append(H(a.Risk)).Append("</td></tr>");
+        {
+            var availability = !a.CanAutomate ? "Вручную" : d.System.ExecutionContext is null ? "Контекст не сохранён"
+                : ExecutionPolicy.StateText(ExecutionPolicy.For(a.Id, d.System.ExecutionContext).State);
+            sb.Append("<tr><td>").Append(H(a.Kind)).Append("</td><td>").Append(H(a.Title)).Append("</td><td>").Append(H(a.Reason)).Append("</td><td>").Append(a.CanAutomate ? "Да" : "Нет").Append("</td><td>").Append(a.RequiresAdmin ? "Да" : "Нет").Append("</td><td>").Append(H(a.Risk)).Append("</td><td>").Append(H(availability)).Append("</td></tr>");
+        }
         sb.Append("</tbody></table></section>");
         Processes(sb, d);
         Events(sb, d);
@@ -94,23 +99,30 @@ public sealed class ReportService
         Header(sb, "Автопроверка после remediation", DateTime.Now);
         Hero(sb, v.After.Assessment.Score, v.After.Assessment.Status, $"{v.After.Data.System.ComputerName} · было {v.Before.Assessment.Score}/100 → стало {v.After.Assessment.Score}/100");
         Triage(sb, v.After);
-        sb.Append("<section><h2>До / после</h2><table><thead><tr><th>Показатель</th><th>До</th><th>После</th><th>Изменение</th></tr></thead><tbody>");
+        ContextBlock(sb, "Контекст диагностики до действий", v.Before.Data.System.ExecutionContext);
+        ContextBlock(sb, "Контекст повторной диагностики", v.After.Data.System.ExecutionContext);
+        sb.Append("<section><h2>До / после</h2><p>Сравнивайте полноту и контекст обоих снимков. Изменение индекса не доказывает устранение симптома.</p><table><thead><tr><th>Показатель</th><th>До</th><th>После</th><th>Изменение</th></tr></thead><tbody>");
         foreach (var r in CompareRows(v.Before, v.After))
             sb.Append("<tr><td>").Append(H(r.Name)).Append("</td><td>").Append(H(r.Before)).Append("</td><td>").Append(H(r.After)).Append("</td><td>").Append(H(r.Delta)).Append("</td></tr>");
         sb.Append("</tbody></table></section>");
-        sb.Append("<section><h2>Выполненные действия</h2><table><thead><tr><th>Действие</th><th>Результат</th><th>Код</th><th>Подробности</th></tr></thead><tbody>");
+        sb.Append("<section><h2>Выполненные действия</h2><p>Разные контексты выполнения: ")
+            .Append(H(ExecutionPolicy.Flag(v.Remediation.MixedExecutionContexts)))
+            .Append(". Для атрибуции используйте сведения каждой операции.</p><table><thead><tr><th>Действие</th><th>Результат</th><th>Код</th><th>Подробности</th><th>Фактический контекст / область</th></tr></thead><tbody>");
         foreach (var r in v.Remediation.Actions)
-            sb.Append("<tr><td>").Append(H(r.Id)).Append("</td><td><span class='pill ").Append(r.Success ? "ok" : "crit").Append("'>").Append(r.Success ? "Успешно" : "Ошибка").Append("</span></td><td>").Append(H(r.ExitCode?.ToString() ?? "—")).Append("</td><td>").Append(H(r.Message)).Append("</td></tr>");
+            sb.Append("<tr><td>").Append(H(r.Id)).Append("</td><td><span class='pill ").Append(r.Success ? "ok" : "crit").Append("'>").Append(r.Success ? "Успешно" : "Ошибка").Append("</span></td><td>").Append(H(r.ExitCode?.ToString() ?? "—")).Append("</td><td>").Append(H(r.Message)).Append("</td><td><p>").Append(H(ExecutionPolicy.Value(r.TargetScope))).Append("</p><pre>").Append(H(ExecutionPolicy.Describe(r.ExecutionContext))).Append("</pre></td></tr>");
         sb.Append("</tbody></table></section>");
         Findings(sb, v.After.Assessment.Findings, "Актуальные выводы после проверки");
         return End(sb);
     }
 
+    private static void ContextBlock(StringBuilder sb, string title, ExecutionContextInfo? context)
+        => sb.Append("<section><h2>").Append(H(title)).Append("</h2><pre>").Append(H(ExecutionPolicy.Describe(context))).Append("</pre></section>");
+
     private static StringBuilder Begin(string title)
     {
         var sb = new StringBuilder();
         sb.Append("<!doctype html><html lang='ru'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>").Append(H(title)).Append("</title><style>");
-        sb.Append("body{margin:0;background:#f4f7fa;color:#172432;font:14px/1.45 'Segoe UI',Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;background:white;border-bottom:1px solid #dce5ed}.brand{display:flex;gap:14px;align-items:center}.logo{width:52px;height:58px}main{max-width:1480px;margin:auto;padding:24px}section{background:white;border:1px solid #dce5ed;border-radius:14px;padding:20px;margin:0 0 18px}.hero{display:flex;gap:22px;align-items:center}.score{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;border:9px solid}.score.ok{color:#177a4b;border-color:#bfe5d2}.score.warn{color:#a56a00;border-color:#f4d99c}.score.crit{color:#b53636;border-color:#f0b8b8}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;background:none;border:0;padding:0}.card{background:white;border:1px solid #dce5ed;border-radius:14px;padding:18px;display:flex;flex-direction:column}.card strong{font-size:27px;margin:5px 0}.muted,.stamp,.card small{color:#687a8b}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #dce5ed;padding:9px 10px;text-align:left;vertical-align:top}th{color:#4b6174;background:#f8fafc}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700}.pill.ok{background:#dff4e9;color:#177a4b}.pill.warn{background:#fff0c9;color:#a56a00}.pill.crit{background:#ffe1e1;color:#b53636}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}@media(max-width:900px){.cards,.grid3{grid-template-columns:1fr 1fr}}@media(max-width:600px){.cards,.grid3{grid-template-columns:1fr}main{padding:10px}}");
+        sb.Append("body{margin:0;background:#f4f7fa;color:#172432;font:14px/1.45 'Segoe UI',Arial,sans-serif}header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;background:white;border-bottom:1px solid #dce5ed}.brand{display:flex;gap:14px;align-items:center}.logo{width:52px;height:58px}main{max-width:1480px;margin:auto;padding:24px}section{background:white;border:1px solid #dce5ed;border-radius:14px;padding:20px;margin:0 0 18px}.hero{display:flex;gap:22px;align-items:center}.score{width:96px;height:96px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;border:9px solid}.score.ok{color:#177a4b;border-color:#bfe5d2}.score.warn{color:#a56a00;border-color:#f4d99c}.score.crit{color:#b53636;border-color:#f0b8b8}.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;background:none;border:0;padding:0}.card{background:white;border:1px solid #dce5ed;border-radius:14px;padding:18px;display:flex;flex-direction:column}.card strong{font-size:27px;margin:5px 0}.muted,.stamp,.card small{color:#687a8b}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #dce5ed;padding:9px 10px;text-align:left;vertical-align:top}th{color:#4b6174;background:#f8fafc}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700}.pill.ok{background:#dff4e9;color:#177a4b}.pill.warn{background:#fff0c9;color:#a56a00}.pill.crit{background:#ffe1e1;color:#b53636}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}@media(max-width:900px){.cards,.grid3{grid-template-columns:1fr 1fr}}@media(max-width:600px){.cards,.grid3{grid-template-columns:1fr}main{padding:10px}}");
         sb.Append("</style></head><body>");
         return sb;
     }
@@ -179,7 +191,7 @@ public sealed class ReportService
     {
         var d = scan.Data;
         sb.Append("<section><h2>Система</h2><table><tbody>");
-        Row(sb, "ПК", d.System.ComputerName); Row(sb, "Пользователь", d.System.UserName); Row(sb, "Производитель / модель", d.System.Manufacturer + " " + d.System.Model); Row(sb, "Windows", d.System.OS + " " + d.System.OSVersion + " build " + d.System.BuildNumber); Row(sb, "CPU", d.System.Cpu); Row(sb, "RAM", $"{d.System.TotalMemoryGB:0.#} GB"); Row(sb, "Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Row(sb, "Права процесса", d.System.IsAdministrator ? "Administrator" : "Standard user"); Row(sb, "Windows Update", $"wuauserv={d.Updates.Wuauserv}; BITS={d.Updates.Bits}"); Row(sb, "Антивирус / EDR", d.SecurityProducts.Count == 0 ? "Не удалось определить" : string.Join("; ", d.SecurityProducts.Select(x => x.Name + " [" + x.State + "]")));
+        Row(sb, "ПК", d.System.ComputerName); Row(sb, "Пользователь", d.System.UserName); Row(sb, "Производитель / модель", d.System.Manufacturer + " " + d.System.Model); Row(sb, "Windows", d.System.OS + " " + d.System.OSVersion + " build " + d.System.BuildNumber); Row(sb, "CPU", d.System.Cpu); Row(sb, "RAM", $"{d.System.TotalMemoryGB:0.#} GB"); Row(sb, "Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Row(sb, "Права процесса", ExecutionPolicy.ModeText(d.System.ExecutionContext)); Row(sb, "Windows Update", $"wuauserv={d.Updates.Wuauserv}; BITS={d.Updates.Bits}"); Row(sb, "Антивирус / EDR", d.SecurityProducts.Count == 0 ? "Не удалось определить" : string.Join("; ", d.SecurityProducts.Select(x => x.Name + " [" + x.State + "]")));
         Row(sb, "Системный том Windows", SystemDiskSelection.CurrentDriveId ?? "Не определён");
         sb.Append("</tbody></table>");
         if (d.CollectionWarnings.Count > 0) sb.Append("<h3>Предупреждения сбора</h3><ul>").Append(string.Join("", d.CollectionWarnings.Select(x => "<li>" + H(x) + "</li>"))).Append("</ul>");

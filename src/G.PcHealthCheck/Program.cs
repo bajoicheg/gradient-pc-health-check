@@ -50,7 +50,8 @@ internal static class Program
             {
                 var behavior = ExecutionContextSelfTest.Run();
                 var integration = ExecutionContextIntegrationSelfTest.Run();
-                result = behavior != 0 ? behavior : integration;
+                var actions = ExecutionContextActionSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : actions;
             }
             Environment.Exit(result);
             return;
