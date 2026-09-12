@@ -19,6 +19,7 @@ internal static class Program
             if (result == 0) result = PortableElevationSelfTest.Run();
             if (result == 0) result = ReadOnlyReviewSelfTest.Run();
             if (result == 0) result = ReadOnlyReviewUiSelfTest.Run();
+            if (result == 0) result = ResourceProbeSelfTest.Run();
             Environment.Exit(result);
             return;
         }
