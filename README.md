@@ -2,17 +2,25 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable findings, before/after reporting and controlled remediation.
 
-Current project version: **0.11.0**. A self-contained single-file `G-PC-Health-Check.exe`; no installation is required. Portable copies may use any folder and filename.
+Current project version: **0.12.0**. A self-contained single-file `G-PC-Health-Check.exe`; no installation is required. Portable copies may use any folder and filename.
 
 > **Privacy:** review exports before sharing. Account names/SIDs, profile and file paths, commands, events, device identifiers, resource addresses and notes can be sensitive. Search is not redaction. See [`SECURITY.md`](SECURITY.md).
 
-## New in 0.11.0 — who runs the tool, whose data it reads
+## New in 0.12.0 — network endpoints and processes
+
+**Анализ → Сетевые соединения и порты (TCP/UDP)…** reads local TCP4/TCP6/UDP4/UDP6 owner-PID tables on demand. It shows local/remote IPs and ports where meaningful, native states and PIDs, and process names only when PID/creation-time evidence agrees before and after the table reads. Missing or reused process identity remains explicit; PID 0 is not guessed as the idle process.
+
+The window offers literal process/PID/address/port search, TCP/UDP/LISTEN/ESTABLISHED/change filters, typed sorting, details, repeat/stop, elapsed progress and full HTML/JSON exports of current/previous snapshots. Comparisons require complete corresponding tables and matching host/actor/session/rights. They describe observations, not exact socket lifetimes; failed collection cannot imply disappearance. Limits: 5000 retained rows per table, 16 MiB buffers/four retries, 8192 process objects per observation, 2000 displayed matching rows.
+
+No reverse DNS, packet capture, active network probe, connection closing, process termination, elevation or firewall changes. UDP shows local bindings, not remote conversations; LISTEN does not prove reachability through the firewall. This is separate from the existing active resource check. [Scope, sources and pilot checks](docs/releases/0.12.0.md).
+
+## Execution context (0.11.0) — who runs the tool, whose data it reads
 
 The main context strip distinguishes a standard user, an administrator without elevation, an elevated administrator, a full token without a linked UAC pair, and incomplete evidence. It separately displays the **process account** and **user of the process's Windows session**. Open **Права и доступные действия…** for token/session/profile facts, explanations and an availability matrix.
 
 The action table shows availability before confirmation. Unavailable actions are not selectable; DISM/SFC explicitly show when UAC is needed. The process rechecks context before applying and records the actual account, rights and target scope for each action. Mixed normal/admin batches retain both contexts in the before/after view and HTML/JSON. A saved UI snapshot is not an authorization credential.
 
-**Elevated read-only Temp preview is now allowed.** It identifies the current session user and exact profile-based Temp path rather than falling back to the console user or technician's profile. Unknown identity stays unknown. Preview does not delete anything. Actual CleanTemp still requires a normal, non-elevated process belonging to that same verified session user; this difference is visible before applying.
+**Elevated read-only Temp preview is allowed.** It identifies the current session user and exact profile-based Temp path rather than falling back to the console user or technician's profile. Unknown identity stays unknown. Preview does not delete anything. Actual CleanTemp still requires a normal, non-elevated process belonging to that same verified session user; this difference is visible before applying.
 
 Startup review still reads HKCU/personal Startup of the **process account**. Raising only the repair worker does not elevate the original GUI's subsequent diagnostics. There is no automatic privileged diagnostic broker or account impersonation. Machine repairs no longer require finding a user profile. See [`docs/releases/0.11.0.md`](docs/releases/0.11.0.md) for the matrix, implemented scope and required pilot cases.
 
@@ -28,6 +36,7 @@ Startup review still reads HKCU/personal Startup of the **process account**. Rai
 | Сеанс производительности… | Timed CPU/RAM/disk observation with live graphs and symptom markers | Default 120 seconds / 2 seconds; sample statistics, not time fractions or proof of a bottleneck. [0.9.0](docs/releases/0.9.0.md) |
 | Место по папкам… | Own/subtree logical sizes, counts, immediate folders and largest 200 files | Default 200000 entries / 20000 folders / 120 seconds; no deletion or file-content reads. [0.10.0](docs/releases/0.10.0.md) |
 | Подробности накопителей… | Physical-disk properties and explicitly associated Windows reliability counters | Missing is not zero; consumed wear, not remaining health; not full raw SMART or a surface test. [0.10.0](docs/releases/0.10.0.md) |
+| Сетевые соединения и порты (TCP/UDP)… | Local owner-PID tables, checked process-name attribution and qualified snapshot differences | No probe/reverse DNS or connection/process changes; full retained-snapshot export. [0.12.0](docs/releases/0.12.0.md) |
 
 Read-only tools open idle and provide explicit collection, progress, cancellation, details and local reports. Export before replacing an in-memory result. HTML/JSON preserve the complete collected snapshot, not only a search filter. Permissions, source limits and unavailable values remain meaningful; no provider is guaranteed to return promptly. Folder sizes are logical, nested totals overlap and hard links count per name. Network/cloud paths and native name resolution may generate OS traffic.
 
