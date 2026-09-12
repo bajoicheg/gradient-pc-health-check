@@ -96,7 +96,9 @@ $manifest = [ordered]@{
     sha256 = $actualHash
     gitSha = if ([string]::IsNullOrWhiteSpace($GitSha)) { $null } else { $GitSha }
     packagedAtUtc = [DateTime]::UtcNow.ToString('o')
-    trustedRemediationPath = '%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe'
+    trustedRemediationPath = $null
+    portableElevation = $true
+    executableNameRestricted = $false
     privilegedActions = @('Dism','Sfc')
     cleanTempScope = '%LOCALAPPDATA%\Temp'
     cleanTempElevated = $false
@@ -116,6 +118,7 @@ G PC Health Check $version — PILOT / E2E
 1. Сверьте SHA-256:
    Get-FileHash .\G-PC-Health-Check.exe -Algorithm SHA256
    Get-Content .\G-PC-Health-Check.exe.sha256
+   После переименования EXE укажите его новое имя в Get-FileHash; значение хэша не меняется.
 
 2. Прочитайте:
    .\docs\E2E-TEST-PLAN.md
@@ -124,11 +127,14 @@ G PC Health Check $version — PILOT / E2E
    CleanTemp также работает без elevation и удаляет только старые обычные файлы из %LOCALAPPDATA%\Temp текущего пользователя.
    Elevated worker CleanTemp не принимает.
 
-4. Для DISM/SFC проверенный EXE должен быть заранее размещён по пути:
-   %ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe
-   Только эти действия инициируют UAC.
+4. DISM/SFC разрешены из любого расположения и с любым именем EXE.
+   Перенос в Program Files и установка не требуются. Запустите приложение обычным двойным кликом.
+   После выбора и подтверждения этих действий программа запросит UAC для той же копии EXE.
+   Права доступа Windows, доступность сетевого пути и корпоративные политики запуска продолжают действовать.
+   Не перемещайте и не переименовывайте файл во время работы приложения.
 
-5. После E2E соберите ZIP через e2e\Collect-E2EEvidence.ps1 и проверьте его через e2e\Analyze-E2EEvidence.ps1.
+5. После E2E соберите ZIP через e2e\Collect-E2EEvidence.ps1, указав -SourceExe с фактическим путём, и проверьте его через e2e\Analyze-E2EEvidence.ps1.
+   Сравнение с прежней Program Files копией в старом анализаторе — дополнительная проверка, а не требование установки.
 
 Version: $version
 FileVersion: $fileVersion

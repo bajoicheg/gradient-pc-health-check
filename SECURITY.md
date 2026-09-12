@@ -13,32 +13,22 @@ Preferred reporting path:
 1. Use GitHub **Private vulnerability reporting** / **Report a vulnerability** on the repository Security page when that option is available.
 2. If private vulnerability reporting is not available, contact the repository maintainer privately through the GitHub profile before sending technical details or evidence.
 
-A useful report should include:
-
-- affected version and commit SHA, if known;
-- attack prerequisites and required privilege level;
-- reproducible steps or a minimal proof of concept;
-- expected versus actual security boundary;
-- impact;
-- suggested mitigation, if available.
-
-Do not include real corporate credentials or production workstation evidence. Synthetic or redacted reproductions are preferred.
+A useful report should include the affected version/SHA, attack prerequisites and privilege level, reproducible steps with synthetic or redacted data, expected/actual boundary, impact and suggested mitigation. Do not include production credentials or unreviewed workstation exports.
 
 ## Security model
 
-The detailed application security model is documented in [`docs/SECURITY.md`](docs/SECURITY.md).
+The application model is documented in [`docs/SECURITY.md`](docs/SECURITY.md).
 
-Key boundaries include:
+- Diagnostics and user Temp cleanup are non-privileged; `CleanTemp` is never accepted by the elevated worker.
+- Administrative actions require explicit selection/confirmation and an administrative token. Standard-user launches use Windows UAC.
+- Since 0.5.2, administrative actions are portable: the EXE may have any name/location. The former canonical Program Files gate was intentionally removed at the owner's request, not replaced with a signing check.
+- Worker commands remain fixed; session, pipe, nonce, unknown/mixed action lists and results are validated.
+- Legacy copy/install bootstrap remains disabled because the current EXE is launched directly.
 
-- diagnostics and user Temp cleanup are non-privileged;
-- `CleanTemp` is not accepted by the elevated worker;
-- administrative remediation is restricted to a fixed allow-list and a canonical installed executable path;
-- privileged worker requests are bound to a one-time session/nonce over a local named pipe;
-- unknown or mixed unknown remediation actions fail closed;
-- legacy bootstrap from user-writable locations is disabled.
+Portable elevation does not claim that a writable executable location is protected against replacement or side-loading. Windows execution policy and access controls still apply. The PE is not Authenticode-signed; release checksums and build/SBOM provenance are separate controls.
 
 ## Diagnostic evidence is sensitive
 
-`tools/e2e/Collect-E2EEvidence.ps1` intentionally collects support information such as computer name, current user, domain/user information returned by Windows, OS/hardware data, executable hashes/versions, and recent PC Health Check reports.
+`tools/e2e/Collect-E2EEvidence.ps1` collects support information such as computer/user/domain names, OS/hardware data, executable hashes/versions and recent reports. Pass `-SourceExe` with the actual filename when using a renamed executable.
 
-Treat generated E2E evidence bundles as internal support data. **Never attach an unreviewed evidence ZIP to a public GitHub issue or pull request.**
+Treat generated evidence as internal support data. **Never attach an unreviewed evidence ZIP to a public GitHub issue or pull request.**

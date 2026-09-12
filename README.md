@@ -2,72 +2,55 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and controlled remediation.
 
-Current project version: **0.5.1**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.5.2**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
-> **Security / privacy:** never attach unreviewed diagnostic reports to a public Issue or Pull Request. Evidence may include workstation names, usernames, domain information, hardware/OS details, device names and network addresses. See [`SECURITY.md`](SECURITY.md).
+> **Security / privacy:** never publish unreviewed diagnostic reports. Evidence may contain workstation/user/domain names, hardware details, device names and network addresses. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.5.1 fixes
+## What 0.5.2 fixes
 
-Assessment, the dashboard, clipboard and HTML/before-after reports now use one system-volume selector. They resolve the local Windows volume instead of assuming C:, normalize equivalent drive-root forms, and never substitute another disk when the expected volume is absent. Invalid or ambiguous disk measurements reduce coverage without fabricating a confirmed fault or preselecting cleanup; a measured zero free space remains critical. The System tab and report identify the Windows volume explicitly.
+**DISM/SFC can now be launched from any EXE location and under any EXE filename**, including Downloads, a portable tools directory and a renamed copy. Neither installation nor a fixed Program Files path is required. The previous path/name checks have been removed from both the GUI dispatch path and the worker entry point.
 
-The fix includes 24 synthetic regression scenarios. It applies to local workstation diagnostics, not offline import/reanalysis of another computer's report. Collector, worker/elevation boundaries, dependencies and workflow permissions are unchanged. Details and pilot checks: [`docs/releases/0.5.1.md`](docs/releases/0.5.1.md).
+Start the application normally, choose the required actions and confirm them. Administrative actions launch the same current executable with Windows UAC; user Temp cleanup remains in the original standard-user process. Moving or renaming the EXE must be done while the application is closed. Windows access permissions, UAC and enterprise execution policies still apply; a network path must be accessible to the administrative identity as well.
 
-## What 0.5.0 adds
+The worker still accepts only its fixed action IDs and validates the session, pipe name, nonce and administrative token. It does not copy/install itself or use an external shell/helper. The legacy bootstrap is not used. The UAC child uses the current absolute EXE path and a Windows system working directory, so filenames with spaces or Unicode are not turned into shell commands.
 
-The menu **Типовые проблемы: сеть, печать, устройства** opens an additional diagnostic window in the same EXE:
+This intentionally removes the previous application-level deployment-path restriction at the product owner's request. It is not a claim that writable launch locations are equivalent to protected deployment, and it does not add Authenticode signing.
 
-- local network/IP/DNS configuration checks, including IPv6-only and multiple-NIC cases;
-- installed printer/default/offline/driver-reported state and Print Spooler status;
-- present Plug-and-Play device error codes, distinguishing disabled/disconnected devices from actionable faults;
-- explicit `UNKNOWN` when a collector or device state is unavailable;
-- evidence and guided resolution steps, fixed Windows Settings shortcuts, scan/cancel, clipboard summary and local HTML/JSON exports with previous/current snapshots;
-- an optional, separately confirmed DNS-cache flush that reuses the existing allow-listed action, followed by a configuration rescan. It is not offered when no usable IP or configured DNS is available.
-
-These additional results do not silently change the existing Health Score/Coverage model. IP/DNS configuration does not prove resource reachability; a printer driver's status does not prove successful printing. `INFO` is contextual evidence, not a healthy verdict. A successful command or a repeated scan does not prove that the user's symptom is resolved.
-
-No automatic network/Winsock reset, DHCP release, DNS/proxy/VPN changes, print-job deletion, Spooler restart, driver installation or device enabling is added. Existing worker/elevation boundaries and dependencies are unchanged.
-
-The practical 12-family backlog, technical sources and automation boundaries are documented in [`docs/COMMON-PROBLEMS.md`](docs/COMMON-PROBLEMS.md). This is a product-priority catalogue, not a measured incident-frequency ranking. Version notes and pilot checks: [`docs/releases/0.5.0.md`](docs/releases/0.5.0.md).
+Verification covers 20 portable-elevation regressions plus 32 process invocations across four executable path/name layouts. The latter runs self-tests and invalid-request checks, not real DISM/SFC. Actual Windows 11 UAC/alternate-admin/remediation acceptance remains a pilot step. See [`docs/releases/0.5.2.md`](docs/releases/0.5.2.md).
 
 ## Diagnostic capabilities
 
-The main window collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security products, network and Windows Update signals. CPU and disk samples use short-series medians to reduce transient false positives. Disk-pressure findings require both elevated busy percentage and queue depth; repeated events are grouped by Provider/Event ID.
+The main window collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security-product, network and Windows Update signals. CPU and disk values use short-series medians; disk-pressure findings require elevated busy percentage and queue depth together. Event findings account for repeated Provider/Event ID groups rather than raw counts alone.
 
-The dashboard displays score, diagnostic coverage, significant findings and the next Service Desk step. Missing signals appear in the System view, clipboard summary and reports. Process/event columns sort by typed numeric values. Scanning shows progress and elapsed time without a global busy cursor. HTML/JSON reports support before/after comparison.
+The dashboard exposes score, coverage, significant findings and the next Service Desk step. Missing telemetry does not mean healthy. Unknown signals reduce coverage without fabricating a health-score penalty. Primary guidance and clipboard observations prioritize the most important finding. System-volume selection is shared by assessment, dashboard and reports and does not assume C:.
 
-Since 0.4.3, every missing weighted diagnostic signal produces a data warning even if coverage remains in the numeric HIGH band. Missing data does not subtract score points; confirmed CRIT findings retain priority. Physical-health coverage requires known status for every discovered disk; unknown health is not proof of failure. Unmeasured system-disk space is explicitly identified.
+The menu **Типовые проблемы: сеть, печать, устройства** opens additional local IP/DNS configuration, printer/Spooler and Plug-and-Play checks. Each result includes evidence, status and guided next steps; WARN precedes UNKNOWN, INFO and OK. Repeat/cancel collection, previous/current snapshots, clipboard and HTML/JSON exports are available. Fixed Windows Settings shortcuts assist manual work. Optional DNS-cache cleanup requires separate confirmation and reuses the existing action.
 
-Since 0.4.4, the next step comes from the primary finding itself, never an unrelated action for a secondary issue. Clipboard observations use the same critical-first/penalty-second ordering before truncation and state the omitted count. Presentation does not change scores or selected actions.
+IP/DNS configuration is not proof of resource reachability. Printer-driver status is not proof of successful printing. Command success is not proof the user's symptom is resolved. The extra common-problem checks do not silently change the original score model.
 
-The score is not a probability of health. See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) and [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md).
+See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/COMMON-PROBLEMS.md`](docs/COMMON-PROBLEMS.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) and [`CHANGELOG.md`](CHANGELOG.md). The common-problem catalogue is a product-priority backlog, not measured incident-frequency statistics.
 
-## Remediation security boundary
+## Remediation boundaries
 
-Normal-user diagnostics and reports do not need elevation. `CleanTemp` removes only old ordinary files under the interactive user's `%LOCALAPPDATA%\Temp`; `FlushDns` is also available without the administrative worker.
+Diagnostics and reports do not require elevation. `CleanTemp` removes only old ordinary files from the interactive user's `%LOCALAPPDATA%\Temp`; it does not clean Windows Temp or Prefetch and does not traverse reparse points/junctions/symbolic links. It refuses to run inside an already elevated GUI. `FlushDns` normally runs without the administrative worker.
 
-`CleanTemp` does not clean Windows Temp, Prefetch or other system directories. It does not traverse reparse points, junctions or symbolic links, and refuses to run when the GUI is elevated.
+`DISM /Online /Cleanup-Image /RestoreHealth` and `SFC /scannow` require administrative rights. From a standard-user GUI they use UAC for the same EXE, independent of its name or directory. A combined batch keeps `CleanTemp` out of the elevated worker and runs it in the parent user context. Cancelled UAC does not execute the batch.
 
-`DISM /Online /Cleanup-Image /RestoreHealth` and `SFC /scannow` require UAC. The administrative worker is allowed only from the exact canonical installation path:
+The worker accepts only `FlushDns`, `Dism`, `Sfc`, rejects `CleanTemp` and unknown/mixed action lists, and returns results over a session/nonce-bound local named pipe. No automatic network reset, DHCP release, DNS/proxy/VPN/GPO/EDR change, Spooler restart, print-job deletion, driver installation, device enabling or automatic reboot is added. Details: [`docs/SECURITY.md`](docs/SECURITY.md).
 
-`%ProgramFiles%\G\PCHealthCheck\G-PC-Health-Check.exe`
+## Build, CI and release provenance
 
-The worker validates that path, rejects reparse points, accepts only the fixed IDs `FlushDns`, `Dism`, `Sfc`, rejects `CleanTemp` and unknown/mixed action lists, and uses a one-time session ID and nonce over a local named pipe. Legacy bootstrap from user-writable locations remains disabled. See [`docs/SECURITY.md`](docs/SECURITY.md).
+The `Windows EXE` workflow runs on main pushes, pull requests and manual dispatch with read-only repository permissions and pinned Actions. It validates PowerShell scripts, deterministic brand assets, NuGet vulnerabilities including transitive dependencies, warnings-as-errors build, source and published-EXE self-tests, the portable worker matrix, FileVersion, SHA-256 and pilot-package UTF-8/metadata.
 
-## Build, CI and releases
+Changes are integrated through pull requests with required build/analyzer/supply-chain checks. Main push builds trigger release publication and supply-chain attestations only after success; both validate the exact tested SHA/run, download that run's artifacts and re-verify the EXE checksum. Existing release tags are not overwritten.
 
-The `Windows EXE` workflow runs on main pushes, pull requests and manual dispatch, with read-only repository permissions and pinned Actions. Its gates include PowerShell parsing/smoke, deterministic branding provenance, NuGet audit including transitive dependencies, warnings-as-errors build, source and single-EXE self-tests, negative worker tests, exact FileVersion, SHA-256 and pilot-package UTF-8 validation.
-
-The protected main branch requires a pull request and passing `build`, `analyzer` and `supply-chain-smoke` checks against the current base, with linear history and protection against deletion/non-fast-forward updates.
-
-A successful main push build triggers release publication and supply-chain attestations. Both validate the triggering run and exact tested SHA, download artifacts from that run and re-verify the EXE checksum. Existing release tags are not overwritten.
-
-The supply-chain workflow generates an SPDX 2.2 SBOM using the pinned Microsoft SBOM Tool, signs EXE/pilot build provenance with GitHub Artifact Attestations, binds the SBOM to the EXE, and retains SBOM/checksum artifacts. Linux restore is dependency-metadata-only with Windows targeting enabled; the Windows application is built on Windows. See [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
+The supply-chain workflow generates an SPDX SBOM and GitHub Artifact Attestations for EXE/pilot provenance and the EXE SBOM. See [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
 
 ```powershell
 gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
-Pull-request builds are not published releases and do not receive main-release attestations. A CI success is not a substitute for managed Windows 11 workstation GUI/UAC/remediation E2E. WMI cancellation is cooperative; per-operation timeouts cannot guarantee that every third-party provider returns promptly.
+PR builds are not published releases. Hosted Windows Server CI is not a substitute for managed Windows 11 GUI/DPI/UAC, real hardware/provider and remediation E2E. WMI cancellation is cooperative, not a guaranteed hard timeout. The pilot procedure is in [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md).
 
 ## Building locally
 
@@ -82,8 +65,8 @@ dotnet publish src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -r win-x64 
 
 ## Contributing, licensing and signing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Use synthetic or redacted data for public reports; report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Use synthetic/redacted public reports and the private reporting procedure in [`SECURITY.md`](SECURITY.md) for vulnerabilities.
 
-Source code is licensed under Apache License 2.0; see [`LICENSE`](LICENSE). The G name, G-shield and related branding are not granted under that license and remain reserved to their owners; see [`NOTICE`](NOTICE).
+Source is Apache License 2.0; see [`LICENSE`](LICENSE). The G name, shield and related branding are reserved to their owners and not granted under that license; see [`NOTICE`](NOTICE).
 
-The PE is not yet Authenticode-signed. Build/SBOM provenance does not replace a Windows publisher signature. For managed deployment, verify the checksum and attestation and use an approved distribution channel; signing and publisher controls remain recommended before broad rollout.
+The PE is not Authenticode-signed. Verify the release checksum/provenance and use an approved distribution channel. Managed installation remains an option, not an application requirement; build attestations do not replace a Windows publisher signature.

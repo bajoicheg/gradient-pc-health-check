@@ -121,9 +121,9 @@ jobs:
           - `G-PC-Health-Check.exe.sha256` — checksum for the EXE;
           - `*-pilot.zip` — optional E2E kit and documentation for pilot verification.
 
-          Administrative remediation (DISM/SFC) is allowed only from the canonical protected path:
-          `C:\Program Files\G\PCHealthCheck\G-PC-Health-Check.exe`.
-          User Temp cleanup runs without elevation in the interactive user's context.
+          Since 0.5.2, administrative remediation (DISM/SFC) is available from any executable location/name, including Downloads and renamed EXE copies. No installation or Program Files location is required.
+          Launch the application normally; selected administrative actions request UAC for the same EXE. Windows permissions and enterprise execution policies still apply.
+          User Temp cleanup runs without elevation in the interactive user's context. The EXE is not Authenticode-signed; verify its checksum and provenance before use.
           EOF
 
           gh release create "${{ steps.version.outputs.tag }}" \

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.2 — Portable administrative actions
+
+- Removed fixed-directory and fixed-EXE-name restrictions from both GUI dispatch and privileged-worker startup, as explicitly requested by the product owner.
+- DISM/SFC now use the current EXE from Downloads, other directories and renamed copies; no installation/copy bootstrap is required.
+- Preserves UAC, explicit action confirmation, administrative-token requirements, fixed commands, worker session/pipe/nonce checks and standard-user-only Temp cleanup.
+- Uses the current absolute EXE path as a separate ProcessStartInfo field, with a Windows system working directory; spaces/Unicode/renamed files are not shell command strings.
+- Added 20 portable-elevation regression cases and a 32-invocation published-EXE matrix across four actual local path/name layouts.
+- Replaced the obsolete noncanonical-path rejection test with portable request-validation checks; retained forbidden-action, invalid pipe/nonce and disabled-bootstrap tests.
+- Updated pilot metadata, START-HERE, current security/pilot docs, README and generated release notes to remove the installation requirement.
+- This intentionally relaxes the previous application-level location boundary. Windows access/launch policy still applies; no Authenticode signature or elimination of writable-directory risks is claimed.
+- Application version: `0.5.2`; FileVersion: `0.5.2.0`. Details: `docs/releases/0.5.2.md`.
+
 ## 0.5.1 — Consistent system-volume diagnostics
 
 - Unified system-volume selection across assessment, main dashboard, clipboard summary and HTML/before-after reporting.
