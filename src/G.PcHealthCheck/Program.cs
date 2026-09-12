@@ -43,7 +43,8 @@ internal static class Program
             {
                 var behavior = StorageReviewSelfTest.Run();
                 var integration = StorageReviewIntegrationSelfTest.Run();
-                result = behavior != 0 ? behavior : integration;
+                var completion = StorageCompletionSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : completion;
             }
             Environment.Exit(result);
             return;

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0 — Folder space analysis and detailed storage evidence
+
+- Adds idle-on-open Analysis tools for an explicitly chosen folder and local physical-disk details.
+- Streams metadata into logical folder totals, own versus subtree sizes, file counts and the 200 largest files; supports typed sorting, literal search and full-snapshot export.
+- Makes access errors, skipped reparse points, cancellation and bounded traversal explicit; does not infer physical allocation or recommend deletion from size.
+- Uses the documented physical-disk/reliability-counter association with nonempty matching DeviceId and rejects ambiguous/mismatched evidence.
+- Shows available firmware, health/media/bus codes, temperature/device limit, consumed wear, power-on hours and uncorrected error counters without inventing absent values.
+- Adds two GUI windows, progress/stop, row details, clipboard and non-overwriting HTML/JSON. Reports retain all collected rows irrespective of search and show immediate-folder size shares.
+- Adds 53 behavior and eight integration cases, complementing prior suites and the portable worker matrix.
+- Preserves arbitrary EXE location/name, UAC, original Health Score/Coverage, existing repairs, dependencies and workflow permissions. No disk operations or file-content reads/deletion are added.
+- Version `0.10.0`, FileVersion `0.10.0.0`. [Scope and validation limits](docs/releases/0.10.0.md).
+
 ## 0.9.0 — Timed performance observation
 
 - Adds an explicitly started CPU/RAM/disk session with duration and interval controls, default 120 seconds / 2 seconds.
