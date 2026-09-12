@@ -2,55 +2,55 @@
 
 Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and controlled remediation.
 
-Current project version: **0.5.2**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.6.0**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
 
-> **Security / privacy:** never publish unreviewed diagnostic reports. Evidence may contain workstation/user/domain names, hardware details, device names and network addresses. See [`SECURITY.md`](SECURITY.md).
+> **Security / privacy:** never publish unreviewed diagnostic reports. Evidence may contain workstation/user/domain names, file paths, startup commands and network addresses. See [`SECURITY.md`](SECURITY.md).
 
-## What 0.5.2 fixes
+## New in 0.6.0 — inspect before acting
 
-**DISM/SFC can now be launched from any EXE location and under any EXE filename**, including Downloads, a portable tools directory and a renamed copy. Neither installation nor a fixed Program Files path is required. The previous path/name checks have been removed from both the GUI dispatch path and the worker entry point.
+Open **Анализ → Предпросмотр очистки Temp…** for a metadata-only preview of the existing old-user-Temp cleanup scope: candidate count, logical size estimate, exact cutoff, 200 largest candidates, skipped links and access errors. Enumeration is bounded at 100,000 entries/30 seconds between provider calls; partial results are explicitly identified. Nothing is deleted. Actual cleanup remains a separately confirmed main-window action that rechecks current file eligibility.
 
-Start the application normally, choose the required actions and confirm them. Administrative actions launch the same current executable with Windows UAC; user Temp cleanup remains in the original standard-user process. Moving or renaming the EXE must be done while the application is closed. Windows access permissions, UAC and enterprise execution policies still apply; a network path must be accessible to the administrative identity as well.
+Open **Анализ → Разбор автозагрузки…** for searchable read-only Run/RunOnce and Startup-folder evidence: names, raw commands/file references, account/scope and per-source collection status. Commands are not expanded or executed, shortcut targets are not resolved, and no entries are disabled. Presence is not proof of enabled state, performance impact or maliciousness. This is a defined subset, not full Autoruns coverage.
 
-The worker still accepts only its fixed action IDs and validates the session, pipe name, nonce and administrative token. It does not copy/install itself or use an external shell/helper. The legacy bootstrap is not used. The UAC child uses the current absolute EXE path and a Windows system working directory, so filenames with spaces or Unicode are not turned into shell commands.
+Both windows offer repeat/cancel, full row details, clipboard summary and local HTML/JSON exports. Cancelled or failed scans do not silently replace earlier snapshots. Exports retain the whole saved snapshot regardless of the current search filter. See [`docs/releases/0.6.0.md`](docs/releases/0.6.0.md) for supported sources, limits, test history and Windows 11 pilot checks. The ideas are independently implemented; third-party utilities and code are not bundled.
 
-This intentionally removes the previous application-level deployment-path restriction at the product owner's request. It is not a claim that writable launch locations are equivalent to protected deployment, and it does not add Authenticode signing.
+## Portable administrative actions (since 0.5.2)
 
-Verification covers 20 portable-elevation regressions plus 32 process invocations across four executable path/name layouts. The latter runs self-tests and invalid-request checks, not real DISM/SFC. Actual Windows 11 UAC/alternate-admin/remediation acceptance remains a pilot step. See [`docs/releases/0.5.2.md`](docs/releases/0.5.2.md).
+**DISM/SFC can be launched from any EXE location and under any EXE filename**, including Downloads and renamed copies. No installation or fixed Program Files path is required. Start normally, choose actions and confirm them; administrative actions request UAC for the same executable. Move/rename the file only while the application is closed. Windows access and enterprise execution policies still apply; network paths must also be accessible to the administrative identity.
+
+The worker validates its fixed action IDs, session, pipe name, nonce and administrative token. User Temp cleanup remains outside the elevated worker. The obsolete copy/install bootstrap is not used. Portability removes the old application-level deployment-path restriction; it does not eliminate writable-directory risks or add Authenticode signing.
 
 ## Diagnostic capabilities
 
-The main window collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security-product, network and Windows Update signals. CPU and disk values use short-series medians; disk-pressure findings require elevated busy percentage and queue depth together. Event findings account for repeated Provider/Event ID groups rather than raw counts alone.
+The main window collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security-product, network and Windows Update signals. CPU/disk values use short-series medians; disk-pressure findings require elevated busy percentage and queue depth together. Event findings consider repeated Provider/Event ID groups rather than raw counts alone.
 
-The dashboard exposes score, coverage, significant findings and the next Service Desk step. Missing telemetry does not mean healthy. Unknown signals reduce coverage without fabricating a health-score penalty. Primary guidance and clipboard observations prioritize the most important finding. System-volume selection is shared by assessment, dashboard and reports and does not assume C:.
+The dashboard exposes score, coverage, findings and the next Service Desk step. Missing telemetry is not treated as healthy or fabricated as a confirmed fault. Primary guidance and clipboard observations prioritize important findings. System-volume selection is shared across assessment, dashboard and reports and does not assume C:.
 
-The menu **Типовые проблемы: сеть, печать, устройства** opens additional local IP/DNS configuration, printer/Spooler and Plug-and-Play checks. Each result includes evidence, status and guided next steps; WARN precedes UNKNOWN, INFO and OK. Repeat/cancel collection, previous/current snapshots, clipboard and HTML/JSON exports are available. Fixed Windows Settings shortcuts assist manual work. Optional DNS-cache cleanup requires separate confirmation and reuses the existing action.
+The menu **Типовые проблемы: сеть, печать, устройства** adds local IP/DNS configuration, printer/Spooler and Plug-and-Play checks with evidence and guided next steps, repeat/cancel, snapshots and export. Fixed Windows Settings shortcuts assist manual investigation. Optional DNS-cache cleanup requires separate confirmation.
 
-IP/DNS configuration is not proof of resource reachability. Printer-driver status is not proof of successful printing. Command success is not proof the user's symptom is resolved. The extra common-problem checks do not silently change the original score model.
+Configuration is not proof of resource reachability, printer-driver status is not proof of successful printing, and command success is not proof the symptom is resolved. Neither common-problem checks nor the 0.6.0 read-only reviews silently change the original health model.
 
-See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/COMMON-PROBLEMS.md`](docs/COMMON-PROBLEMS.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) and [`CHANGELOG.md`](CHANGELOG.md). The common-problem catalogue is a product-priority backlog, not measured incident-frequency statistics.
+See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/COMMON-PROBLEMS.md`](docs/COMMON-PROBLEMS.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md), [`CHANGELOG.md`](CHANGELOG.md) and [0.6.0 version notes](docs/releases/0.6.0.md). The common-problem catalogue is a product-priority backlog, not incident-frequency statistics.
 
 ## Remediation boundaries
 
-Diagnostics and reports do not require elevation. `CleanTemp` removes only old ordinary files from the interactive user's `%LOCALAPPDATA%\Temp`; it does not clean Windows Temp or Prefetch and does not traverse reparse points/junctions/symbolic links. It refuses to run inside an already elevated GUI. `FlushDns` normally runs without the administrative worker.
+Diagnostics and reports do not require elevation. `CleanTemp` removes only old ordinary files from the interactive user's `%LOCALAPPDATA%\Temp`; it does not clean Windows Temp/Prefetch or traverse encountered reparse points. It refuses to run in an already elevated GUI. `FlushDns` normally runs without the administrative worker.
 
-`DISM /Online /Cleanup-Image /RestoreHealth` and `SFC /scannow` require administrative rights. From a standard-user GUI they use UAC for the same EXE, independent of its name or directory. A combined batch keeps `CleanTemp` out of the elevated worker and runs it in the parent user context. Cancelled UAC does not execute the batch.
+DISM RestoreHealth and SFC /scannow require administrative rights. A standard-user GUI requests UAC for the current EXE irrespective of name/location. Combined batches keep `CleanTemp` in the parent user context. The worker accepts only `FlushDns`, `Dism`, `Sfc`, rejects `CleanTemp` and unknown/mixed requests, and returns session/nonce-bound results via a local named pipe. Cancelled UAC does not execute the batch.
 
-The worker accepts only `FlushDns`, `Dism`, `Sfc`, rejects `CleanTemp` and unknown/mixed action lists, and returns results over a session/nonce-bound local named pipe. No automatic network reset, DHCP release, DNS/proxy/VPN/GPO/EDR change, Spooler restart, print-job deletion, driver installation, device enabling or automatic reboot is added. Details: [`docs/SECURITY.md`](docs/SECURITY.md).
+No automatic network reset, DHCP release, DNS/proxy/VPN/GPO/EDR change, Spooler restart, print-job deletion, driver installation, startup disabling or automatic reboot is added. Details: [`docs/SECURITY.md`](docs/SECURITY.md).
 
-## Build, CI and release provenance
+## Build, CI and provenance
 
-The `Windows EXE` workflow runs on main pushes, pull requests and manual dispatch with read-only repository permissions and pinned Actions. It validates PowerShell scripts, deterministic brand assets, NuGet vulnerabilities including transitive dependencies, warnings-as-errors build, source and published-EXE self-tests, the portable worker matrix, FileVersion, SHA-256 and pilot-package UTF-8/metadata.
+The `Windows EXE` workflow runs on main pushes, pull requests and manual dispatch with read-only repository permissions and pinned Actions. Gates cover PowerShell parsing, deterministic branding, transitive NuGet audit, warnings-as-errors build, source/single-EXE self-tests, portable worker checks, FileVersion, SHA-256 and pilot metadata/UTF-8.
 
-Changes are integrated through pull requests with required build/analyzer/supply-chain checks. Main push builds trigger release publication and supply-chain attestations only after success; both validate the exact tested SHA/run, download that run's artifacts and re-verify the EXE checksum. Existing release tags are not overwritten.
-
-The supply-chain workflow generates an SPDX SBOM and GitHub Artifact Attestations for EXE/pilot provenance and the EXE SBOM. See [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
+Changes are integrated through PRs with required checks. Successful main builds trigger release publication and supply-chain attestations; both validate the exact tested SHA/run, download only that run's artifacts and recheck the EXE hash. Existing releases are not overwritten. SPDX SBOM and EXE/pilot provenance are described in [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
 
 ```powershell
 gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
-PR builds are not published releases. Hosted Windows Server CI is not a substitute for managed Windows 11 GUI/DPI/UAC, real hardware/provider and remediation E2E. WMI cancellation is cooperative, not a guaranteed hard timeout. The pilot procedure is in [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md).
+PR builds are not published releases. Hosted Windows Server tests do not replace managed Windows 11 GUI/DPI/UAC, real hardware/provider and remediation checks. Provider cancellation is cooperative, not a hard timeout. See [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md) and the version-specific pilot notes.
 
 ## Building locally
 
@@ -65,8 +65,6 @@ dotnet publish src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -r win-x64 
 
 ## Contributing, licensing and signing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Use synthetic/redacted public reports and the private reporting procedure in [`SECURITY.md`](SECURITY.md) for vulnerabilities.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Use synthetic/redacted public reports and the private reporting process in [`SECURITY.md`](SECURITY.md). Source is Apache License 2.0; see [`LICENSE`](LICENSE). G branding is reserved and not licensed under Apache; see [`NOTICE`](NOTICE).
 
-Source is Apache License 2.0; see [`LICENSE`](LICENSE). The G name, shield and related branding are reserved to their owners and not granted under that license; see [`NOTICE`](NOTICE).
-
-The PE is not Authenticode-signed. Verify the release checksum/provenance and use an approved distribution channel. Managed installation remains an option, not an application requirement; build attestations do not replace a Windows publisher signature.
+The EXE is not Authenticode-signed. Verify the release checksum/provenance and use an approved distribution channel. Managed installation remains optional; build attestations do not replace a Windows publisher signature.

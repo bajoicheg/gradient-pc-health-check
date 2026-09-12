@@ -11,7 +11,12 @@ internal static class ReadOnlyReviewUiSelfTest
     public static int Run()
     {
         var failures = new List<string>(); var count = 0;
-        void Test(string name, Action action) { count++; try { action(); } catch (Exception ex) { failures.Add(name + ": " + ex.Message); } }
+        void Test(string name, Action action)
+        {
+            count++;
+            try { action(); }
+            catch (Exception ex) { failures.Add(name + ": " + ex.Message); Console.Error.WriteLine("FAIL: " + failures[^1]); }
+        }
         var root = Path.Combine(Path.GetTempPath(), "GPcHealthCheck-ReviewUI-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
         try
         {
@@ -48,20 +53,29 @@ internal static class ReadOnlyReviewUiSelfTest
                 using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(first, "snapshot.json")));
                 Require(json.RootElement.GetProperty("Kind").GetString() == "StartupReview", "Wrong exported type.");
             });
-            Test("access-denied subtree yields a partial estimate", () =>
+            Test("access-denied subtree yields a partial estimate and test ACL is restored", () =>
             {
                 var scanRoot = Path.Combine(root, "denied-test"); Directory.CreateDirectory(scanRoot);
                 var denied = Directory.CreateDirectory(Path.Combine(scanRoot, "denied"));
-                var original = denied.GetAccessControl(); var changed = denied.GetAccessControl();
+                var original = denied.GetAccessControl().GetSecurityDescriptorBinaryForm();
+                var changed = denied.GetAccessControl();
                 using var identity = WindowsIdentity.GetCurrent();
                 changed.AddAccessRule(new FileSystemAccessRule(identity.User!, FileSystemRights.ListDirectory, AccessControlType.Deny));
-                denied.SetAccessControl(changed);
                 try
                 {
+                    denied.SetAccessControl(changed);
                     var result = TempPreviewService.Scan(scanRoot, 3, DateTime.Now);
                     Require(result.State == ReviewCollectionState.Partial && result.Errors > 0 && result.Issues.Count > 0, "Access failure not explicit.");
                 }
-                finally { denied.SetAccessControl(original); }
+                finally
+                {
+                    // SetAccessControl persists modified sections only. A freshly read,
+                    // unchanged DirectorySecurity would not restore the old DACL.
+                    var restored = new DirectorySecurity();
+                    restored.SetSecurityDescriptorBinaryForm(original, AccessControlSections.Access);
+                    denied.SetAccessControl(restored);
+                }
+                Require(!Directory.EnumerateFileSystemEntries(denied.FullName).Any(), "Fixture access was not restored.");
             });
             Test("startup source row limit is explicit", () =>
             {
@@ -71,9 +85,12 @@ internal static class ReadOnlyReviewUiSelfTest
             });
             Test("startup refuses silently complete empty provider set", () => Require(StartupReviewService.CollectSources([]).State == ReviewCollectionState.Unavailable, "No providers reported complete."));
         }
-        finally { Directory.Delete(root, true); }
+        finally
+        {
+            try { Directory.Delete(root, true); }
+            catch (Exception ex) { failures.Add("Synthetic fixture cleanup: " + ex.Message); Console.Error.WriteLine("FAIL: " + failures[^1]); }
+        }
         Console.WriteLine($"Read-only review UI/export regression: {count - failures.Count}/{count} passed.");
-        foreach (var failure in failures) Console.Error.WriteLine("FAIL: " + failure);
         return failures.Count == 0 ? 0 : 191;
     }
     private static DataGridView Grid(ReadOnlyReviewForm form) => (DataGridView)typeof(ReadOnlyReviewForm).GetField("_grid", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(form)!;
