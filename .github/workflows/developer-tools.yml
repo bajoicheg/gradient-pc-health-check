@@ -1,0 +1,35 @@
+name: Developer Tools
+
+on:
+  pull_request:
+    paths:
+      - 'tools/dev/**'
+      - 'global.json'
+      - '.github/workflows/developer-tools.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/dev/**'
+      - 'global.json'
+      - '.github/workflows/developer-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-tools-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  developer-tools:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Development workflow regression
+        shell: pwsh
+        run: ./tools/dev/Test-DevWorkflow.ps1
