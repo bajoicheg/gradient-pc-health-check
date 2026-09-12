@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.0 — TCP/UDP endpoint and process review
+
+- Adds an idle-on-open Analysis window for local TCP4/TCP6/UDP4/UDP6 owner-PID tables, addresses, ports and native states.
+- Matches process names only across consistent pre/post PID and creation-time observations; unavailable and changing identity stays explicit.
+- Provides qualified two-snapshot comparisons; failed/partial tables cannot imply disappearance, and ambiguous tuples are preserved.
+- Includes literal search, protocol/state/change filters, numeric sorting, details, repeat/stop, elapsed progress and full HTML/JSON exports with collection context.
+- Distinguishes UDP local bindings and TCP listeners from remote conversations or externally reachable services. No reverse DNS, active probe, capture, connection/process modification or elevation.
+- Bounded native buffers/retries and retained rows; UI display limit does not truncate saved evidence further.
+- Adds 39 behavior and eight integration cases, including disposable IPv4/IPv6 loopback sockets. Previous tests and portable worker matrix remain enabled.
+- Preserves 0.11.0 execution-context/Temp boundaries, all prior tools, remediation commands, health model, dependencies and workflow permissions.
+- Version `0.12.0`, FileVersion `0.12.0.0`. [Scope, sources and pilot checks](docs/releases/0.12.0.md).
+
 ## 0.11.0 — Execution context and elevated read-only Temp preview
 
 - Distinguishes standard, filtered-admin, elevated-admin and full-token contexts; separates process account from current-session user/profile without a physical-console fallback.
