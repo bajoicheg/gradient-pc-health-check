@@ -50,6 +50,7 @@ internal static class Program
         CommonProblemsMenu.Attach(main);
         ReadOnlyReviewMenu.Attach(main);
         ResourceProbeMenu.Attach(main);
+        IncidentReviewMenu.Attach(main);
         Application.Run(main);
     }
 }
