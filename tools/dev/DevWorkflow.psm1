@@ -9,9 +9,15 @@ function Assert-DevAudit {
     param([Parameter(Mandatory)][string]$Json)
     $audit = $Json | ConvertFrom-Json -ErrorAction Stop
     if ($audit.version -ne 1 -or @($audit.projects).Count -eq 0 -or $null -eq $audit.projects) { throw 'Incomplete NuGet audit: version/projects missing.' }
-    if (@($audit.logs | Where-Object { $_.level -eq 'error' }).Count -gt 0) { throw 'NuGet audit reported an error; no clean result is established.' }
+    if (@($audit.logs | Where-Object { $_.level -in 'error','warning' }).Count -gt 0) { throw 'NuGet audit reported an error/warning; no clean result is established.' }
     foreach ($project in $audit.projects) {
-        if ($null -eq $project.frameworks -or @($project.frameworks).Count -eq 0) { throw 'Incomplete NuGet audit: frameworks missing.' }
+        if ($null -eq $project.frameworks -or @($project.frameworks).Count -eq 0) {
+            # SDK 8 JSON format 1 deliberately emits only path for a project with
+            # no vulnerable packages. Observed in the real Windows integration run.
+            $filtered = $audit.parameters -match '(^|\s)--vulnerable(\s|$)' -and $audit.parameters -match '(^|\s)--include-transitive(\s|$)'
+            if ($filtered -and -not [string]::IsNullOrWhiteSpace($project.path) -and $project.path.EndsWith('.csproj', [StringComparison]::OrdinalIgnoreCase)) { continue }
+            throw 'Incomplete NuGet audit: no framework data or validated no-findings project.'
+        }
         foreach ($framework in $project.frameworks) {
             if ([string]::IsNullOrWhiteSpace($framework.framework)) { throw 'Incomplete NuGet audit: framework identity missing.' }
             foreach ($package in @($framework.topLevelPackages) + @($framework.transitivePackages)) {
@@ -36,7 +42,6 @@ function Invoke-DevNative {
     $process = [Diagnostics.Process]::new(); $process.StartInfo = $info
     try {
         [void]$process.Start()
-        # Drain both pipes concurrently; no shell evaluation, stderr is not an exit code.
         $stdoutTask = $process.StandardOutput.ReadToEndAsync()
         $stderrTask = $process.StandardError.ReadToEndAsync()
         $process.WaitForExit()
@@ -46,9 +51,9 @@ function Invoke-DevNative {
         if ($stdout.Length -gt 0) { Write-Host $stdout.TrimEnd() }
         if ($stderr.Length -gt 0) { Write-Host $stderr.TrimEnd() }
         if ($process.ExitCode -ne 0) {
-            $error = [InvalidOperationException]::new("Native command failed with exit code $($process.ExitCode); see stage logs.")
-            $error.Data['ExitCode'] = $process.ExitCode
-            throw $error
+            $failure = [InvalidOperationException]::new("Native command failed with exit code $($process.ExitCode); see stage logs.")
+            $failure.Data['ExitCode'] = $process.ExitCode
+            throw $failure
         }
         return [pscustomobject]@{ ExitCode = $process.ExitCode; Stdout = $stdout; Stderr = $stderr }
     }

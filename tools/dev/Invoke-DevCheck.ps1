@@ -33,7 +33,11 @@ try {
                     if (@($errors).Count -gt 0) { throw "PowerShell parse failure in $($file.Name)." }
                 }
             }
-            'tool-tests' { Invoke-DevNative $tools.pwsh @('-NoLogo','-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot 'Test-DevWorkflow.ps1')) $log | Out-Null }
+            'tool-tests' {
+                foreach ($test in @('Test-DevWorkflow.ps1','Test-DevAuditContract.ps1')) {
+                    Invoke-DevNative $tools.pwsh @('-NoLogo','-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot $test)) ($log + '-' + [IO.Path]::GetFileNameWithoutExtension($test)) | Out-Null
+                }
+            }
             'restore' { Invoke-DevNative $tools.dotnet @('restore',$project) $log | Out-Null }
             'audit' {
                 $audit = Invoke-DevNative $tools.dotnet @('list',$project,'package','--vulnerable','--include-transitive','--format','json','--output-version','1') $log

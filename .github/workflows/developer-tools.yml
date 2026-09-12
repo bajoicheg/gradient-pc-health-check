@@ -44,6 +44,9 @@ jobs:
       - name: Exercise local Full runner on Windows
         shell: pwsh
         run: ./tools/dev/Invoke-DevCheck.ps1 -Profile Full
+      - name: Exercise local Quick runner on Windows
+        shell: pwsh
+        run: ./tools/dev/Invoke-DevCheck.ps1 -Profile Quick
       - name: Preserve compact execution summary
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
