@@ -32,7 +32,12 @@ internal static class Program
                 var integration = IncidentReviewIntegrationSelfTest.Run();
                 result = behavior != 0 ? behavior : integration;
             }
-            if (result == 0) result = PerformanceSessionSelfTest.Run();
+            if (result == 0)
+            {
+                var behavior = PerformanceSessionSelfTest.Run();
+                var integration = PerformanceSessionUiSelfTest.Run();
+                result = behavior != 0 ? behavior : integration;
+            }
             Environment.Exit(result);
             return;
         }
