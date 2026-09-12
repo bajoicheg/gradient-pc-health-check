@@ -3,7 +3,7 @@ using System.Drawing.Drawing2D;
 
 namespace G.PcHealthCheck;
 
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
     private readonly DiagnosticsService _diagnostics = new();
     private readonly AssessmentService _assessment = new();
@@ -53,8 +53,8 @@ public sealed class MainForm : Form
     {
         Text = "G PC Health Check";
         Width = 1320;
-        Height = 840;
-        MinimumSize = new Size(1080, 680);
+        Height = 900;
+        MinimumSize = new Size(1080, 740);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Bg;
         Font = new Font("Segoe UI", 9F);
@@ -66,16 +66,18 @@ public sealed class MainForm : Form
 
     private void BuildUi()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, ColumnCount = 1, Padding = new Padding(16), BackColor = Bg };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, ColumnCount = 1, Padding = new Padding(16), BackColor = Bg };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
         Controls.Add(root);
         root.Controls.Add(Header(), 0, 0);
-        root.Controls.Add(Metrics(), 0, 1);
-        root.Controls.Add(Tabs(), 0, 2);
-        root.Controls.Add(Footer(), 0, 3);
+        root.Controls.Add(ExecutionContextPanel(), 0, 1);
+        root.Controls.Add(Metrics(), 0, 2);
+        root.Controls.Add(Tabs(), 0, 3);
+        root.Controls.Add(Footer(), 0, 4);
     }
 
     private Control Header()
@@ -157,6 +159,7 @@ public sealed class MainForm : Form
         _actions.Columns.Add(new DataGridViewTextBoxColumn { Name = "Admin", HeaderText = "Admin", Width = 62, ReadOnly = true });
         _actions.Columns.Add(new DataGridViewTextBoxColumn { Name = "Risk", HeaderText = "Риск", Width = 75, ReadOnly = true });
         _actions.Columns.Add(new DataGridViewTextBoxColumn { Name = "Verify", HeaderText = "Автопроверка", Width = 270, ReadOnly = true });
+        _actions.Columns.Add(new DataGridViewTextBoxColumn { Name = "Availability", HeaderText = "Доступность", Width = 155, ReadOnly = true, DisplayIndex = 3 });
         foreach (DataGridViewColumn c in _actions.Columns) c.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         _actions.CurrentCellDirtyStateChanged += (_, _) =>
         {
@@ -218,7 +221,7 @@ public sealed class MainForm : Form
         var page = Page("До / после");
         var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, SplitterDistance = 245 };
         ConfigureGrid(_compare); _compare.Columns.Add("Metric", "Показатель"); _compare.Columns.Add("Before", "До"); _compare.Columns.Add("After", "После"); _compare.Columns.Add("Delta", "Изменение"); _compare.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; split.Panel1.Controls.Add(_compare);
-        ConfigureGrid(_remediation); _remediation.Columns.Add("Action", "Действие"); _remediation.Columns.Add("Result", "Результат"); _remediation.Columns.Add("Code", "Exit code"); _remediation.Columns.Add("Details", "Подробности"); _remediation.Columns[3].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; split.Panel2.Controls.Add(_remediation);
+        ConfigureGrid(_remediation); _remediation.Columns.Add("Action", "Действие"); _remediation.Columns.Add("Result", "Результат"); _remediation.Columns.Add("Code", "Exit code"); _remediation.Columns.Add("Details", "Подробности и контекст"); _remediation.Columns[3].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; _remediation.Columns[3].DefaultCellStyle.WrapMode = DataGridViewTriState.True; _remediation.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells; split.Panel2.Controls.Add(_remediation);
         page.Controls.Add(split); return page;
     }
 
@@ -238,12 +241,16 @@ public sealed class MainForm : Form
 
     private async Task ScanAsync()
     {
+        if (_isBusy) return;
         var started = Stopwatch.StartNew();
         try
         {
-            Busy(true, "Запускаю диагностику…");
+            Busy(true, "Определяю контекст диагностики…");
+            var context = await Task.Run(ExecutionContextService.Capture);
+            RenderExecutionContext(context);
             var progress = new Progress<string>(s => _status.Text = s);
             var data = await _diagnostics.CollectAsync(progress);
+            StampExecutionContext(data, context);
             _current = _assessment.Assess(data);
             var saved = _reports.SaveScan(_current);
             _latestReport = saved.Html;
@@ -256,7 +263,7 @@ public sealed class MainForm : Form
 
     private async Task ApplyAsync()
     {
-        if (_current is null) return;
+        if (_isBusy || _current is null) return;
         _actions.EndEdit();
         var selected = SelectedAutomatableActions();
         if (selected.Count == 0)
@@ -264,9 +271,27 @@ public sealed class MainForm : Form
             UpdateApplyState();
             return;
         }
+        try
+        {
+            Busy(true, "Проверяю права и область выбранных действий…");
+            var context = await Task.Run(ExecutionContextService.Capture);
+            RenderExecutionContext(context);
+            RefreshActionAvailability();
+            var blocked = selected.Select(x => (Action: x, Availability: ExecutionPolicy.For(x.Id, context)))
+                .Where(x => !x.Availability.CanRequest).ToList();
+            if (blocked.Count > 0)
+            {
+                MessageBox.Show(this, "Набор не выполнен. Доступность изменилась или контекст не подтверждён:\n\n"
+                    + string.Join("\n", blocked.Select(x => x.Action.Title + ": " + x.Availability.Reason)), "Проверьте выбранные действия", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Не удалось проверить контекст", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        finally { Busy(false); }
 
-        var summary = string.Join(Environment.NewLine, selected.Select(a => "• " + a.Title + (a.RequiresAdmin ? " [Admin]" : "")));
-        if (MessageBox.Show(this, "Будут выполнены выбранные действия:\n\n" + summary + "\n\nПосле выполнения программа автоматически повторит диагностику.", "Подтвердите действия", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
+        var summary = string.Join(Environment.NewLine, selected.Select(a => "• " + a.Title + " — "
+            + ExecutionPolicy.StateText(AvailabilityFor(a).State) + "\n  Область: " + AvailabilityFor(a).Scope));
+        if (MessageBox.Show(this, "Будут выполнены выбранные действия:\n\n" + summary + "\n\nПосле выполнения программа автоматически повторит диагностику в исходном процессе.", "Подтвердите действия", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning) != DialogResult.OK) return;
 
         var before = _current;
         try
@@ -275,7 +300,9 @@ public sealed class MainForm : Form
             var progress = new Progress<string>(s => _status.Text = s);
             var batch = await RemediationWorker.ExecuteFromGuiAsync(selected, _assessment.Thresholds.TempOlderThanDays, progress);
             _status.Text = "Повторная диагностика после remediation…";
+            var context = await Task.Run(ExecutionContextService.Capture);
             var afterData = await _diagnostics.CollectAsync(progress);
+            StampExecutionContext(afterData, context);
             var after = _assessment.Assess(afterData);
             var verification = new VerificationResult { Before = before, After = after, Remediation = batch };
             var saved = _reports.SaveVerification(verification);
@@ -285,7 +312,7 @@ public sealed class MainForm : Form
             PopulateVerification(verification);
             _tabs.SelectedIndex = 4;
             var ok = batch.Actions.Count(x => x.Success);
-            MessageBox.Show(this, $"Выполнено: {ok}/{batch.Actions.Count}. Автопроверка завершена.\nИндекс: {before.Assessment.Score} → {after.Assessment.Score}.", "G PC Health Check", MessageBoxButtons.OK, batch.Actions.All(x => x.Success) ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            MessageBox.Show(this, $"Выполнено: {ok}/{batch.Actions.Count}. Повторная диагностика завершена.\nИндекс: {before.Assessment.Score} → {after.Assessment.Score}.\nУстранение симптома нужно подтвердить отдельно.", "G PC Health Check", MessageBoxButtons.OK, batch.Actions.All(x => x.Success) ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         }
         catch (OperationCanceledException ex) { MessageBox.Show(this, ex.Message, "Операция отменена", MessageBoxButtons.OK, MessageBoxIcon.Information); }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Ошибка remediation", MessageBoxButtons.OK, MessageBoxIcon.Error); }
@@ -297,7 +324,7 @@ public sealed class MainForm : Form
         var selected = new List<ActionRecommendation>();
         foreach (DataGridViewRow row in _actions.Rows)
         {
-            if (row.Tag is not ActionRecommendation action || !action.CanAutomate) continue;
+            if (row.Tag is not ActionRecommendation action || !action.CanAutomate || row.Cells["Selected"].ReadOnly) continue;
             if (Convert.ToBoolean(row.Cells["Selected"].Value ?? false)) selected.Add(action);
         }
         return selected;
@@ -314,6 +341,7 @@ public sealed class MainForm : Form
     private void Populate(ScanResult scan)
     {
         var d = scan.Data;
+        RenderExecutionContext(d.System.ExecutionContext);
         _score.Text = scan.Assessment.Score.ToString(); _score.ForeColor = scan.Assessment.Status == "OK" ? Ok : scan.Assessment.Status == "WARN" ? Warn : Crit;
         _state.Text = scan.Assessment.Status == "OK" ? "норма" : scan.Assessment.Status == "WARN" ? "внимание" : "критично"; _state.ForeColor = _score.ForeColor;
         _host.Text = $"{d.System.ComputerName} · {d.System.UserName}";
@@ -331,9 +359,11 @@ public sealed class MainForm : Form
         _actions.Rows.Clear();
         foreach (var a in scan.Actions)
         {
-            var i = _actions.Rows.Add(a.Preselected, a.Kind, a.Title, a.Reason, a.RequiresAdmin ? "Да" : "Нет", a.Risk, a.Verification);
+            var availability = AvailabilityFor(a);
+            var i = _actions.Rows.Add(a.Preselected && availability.CanRequest, a.Kind, a.Title, a.Reason, a.RequiresAdmin ? "Да" : "Нет", a.Risk, a.Verification, ExecutionPolicy.StateText(availability.State));
             var row = _actions.Rows[i]; row.Tag = a;
-            if (!a.CanAutomate)
+            row.Cells["Availability"].ToolTipText = availability.Reason + "\nОбласть: " + availability.Scope;
+            if (!availability.CanRequest)
             {
                 row.Cells[0].ReadOnly = true;
                 row.Cells[0].Style.BackColor = Color.FromArgb(240, 243, 246);
@@ -368,10 +398,13 @@ public sealed class MainForm : Form
     {
         var d = scan.Data;
         _system.Rows.Clear(); void Add(string k, string v) => _system.Rows.Add(k, v);
-        Add("Компьютер", d.System.ComputerName); Add("Пользователь", d.System.UserName); Add("Производитель / модель", (d.System.Manufacturer + " " + d.System.Model).Trim());
+        Add("Компьютер", d.System.ComputerName); Add("Пользователь сеанса", d.System.UserName); Add("Производитель / модель", (d.System.Manufacturer + " " + d.System.Model).Trim());
         Add("Windows", $"{d.System.OS} {d.System.OSVersion} build {d.System.BuildNumber}"); Add("CPU", d.System.Cpu); Add("RAM", $"{d.System.TotalMemoryGB:0.#} GB");
         Add("Системный том Windows", SystemDiskSelection.CurrentDriveId ?? "Не определён");
-        Add("Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Add("Права процесса", d.System.IsAdministrator ? "Administrator" : "Standard user");
+        Add("Последняя загрузка", d.System.LastBoot.ToString("dd.MM.yyyy HH:mm:ss")); Add("Права процесса", ExecutionPolicy.ModeText(d.System.ExecutionContext));
+        Add("Аккаунт процесса / сеанс", ExecutionPolicy.Value(d.System.ExecutionContext?.ProcessAccount) + " / " + (d.System.ExecutionContext?.SessionId.ToString() ?? "не сохранён"));
+        Add("Профиль пользователя сеанса", ExecutionPolicy.Value(d.System.ExecutionContext?.SessionProfile));
+        Add("Контекст: ограничения", d.System.ExecutionContext is null ? "Контекст не сохранён" : string.Join(" | ", d.System.ExecutionContext.Warnings));
         Add("Покрытие диагностики", $"{scan.Assessment.CoveragePercent}% ({scan.Assessment.CoverageStatus})");
         Add("Недоступные сигналы", scan.Assessment.MissingSignals.Count == 0 ? "Нет" : string.Join("; ", scan.Assessment.MissingSignals));
         Add("Pending reboot", d.PendingReboot.Pending ? "Да — " + string.Join("; ", d.PendingReboot.Reasons) : "Нет"); Add("Windows Update", $"wuauserv={d.Updates.Wuauserv}; BITS={d.Updates.Bits}");
@@ -383,7 +416,7 @@ public sealed class MainForm : Form
     private void PopulateVerification(VerificationResult v)
     {
         _compare.Rows.Clear(); foreach (var r in ReportService.CompareRows(v.Before, v.After)) _compare.Rows.Add(r.Name, r.Before, r.After, r.Delta);
-        _remediation.Rows.Clear(); foreach (var r in v.Remediation.Actions) { var i = _remediation.Rows.Add(r.Id, r.Success ? "Успешно" : "Ошибка", r.ExitCode?.ToString() ?? "—", r.Message); _remediation.Rows[i].Cells[1].Style.ForeColor = r.Success ? Ok : Crit; }
+        _remediation.Rows.Clear(); foreach (var r in v.Remediation.Actions) { var i = _remediation.Rows.Add(r.Id, r.Success ? "Успешно" : "Ошибка", r.ExitCode?.ToString() ?? "—", ActionExecutionText(r)); _remediation.Rows[i].Cells[1].Style.ForeColor = r.Success ? Ok : Crit; }
     }
 
     private void CopySummary()
@@ -418,6 +451,8 @@ public sealed class MainForm : Form
         _openReport.Enabled = !value;
         _openFolder.Enabled = !value;
         _copySummary.Enabled = !value && _current is not null;
+        _contextDetails.Enabled = !value;
+        _actions.Enabled = !value;
         _progress.Visible = value;
         if (text is not null) _status.Text = text;
         // Do not switch the form-wide cursor for background work. DataGridView/native child

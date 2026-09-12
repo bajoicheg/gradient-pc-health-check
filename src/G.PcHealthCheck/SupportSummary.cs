@@ -24,6 +24,8 @@ internal static class SupportSummary
         sb.AppendLine($"Следующий шаг: {triage.NextAction}");
         sb.AppendLine($"CPU: {Format(d.Performance.CpuPercent, "%")}; RAM: {Format(d.Performance.MemoryUsedPercent, "%")}; {SystemDiskSelection.CurrentDriveId ?? "Системный диск"} {(systemDrive is null ? "—" : $"{systemDrive.FreeGB:0.#} GB свободно")}; uptime: {d.System.UptimeDays:0.#} дн.");
         sb.AppendLine($"Диск I/O: busy {Format(d.Performance.DiskBusyPercent, "%")}; queue {Format(d.Performance.DiskQueueLength, "")}");
+        sb.AppendLine("Контекст диагностики:");
+        sb.AppendLine(ExecutionPolicy.Describe(d.System.ExecutionContext));
 
         if (a.MissingSignals.Count > 0)
             sb.AppendLine("Недоступные сигналы: " + string.Join(", ", a.MissingSignals));
@@ -45,7 +47,10 @@ internal static class SupportSummary
         {
             sb.AppendLine("Рекомендуемые действия:");
             foreach (var action in recommended)
-                sb.AppendLine($"- {action.Title}{(action.RequiresAdmin ? " [Admin]" : "")}");
+            {
+                var availability = d.System.ExecutionContext is null ? null : ExecutionPolicy.For(action.Id, d.System.ExecutionContext);
+                sb.AppendLine($"- {action.Title}{(action.RequiresAdmin ? " [Admin]" : "")}{(availability is null ? "" : " — " + ExecutionPolicy.StateText(availability.State))}");
+            }
         }
 
         return sb.ToString().TrimEnd();
