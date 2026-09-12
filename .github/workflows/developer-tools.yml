@@ -1,0 +1,57 @@
+name: Developer Tools
+
+on:
+  pull_request:
+    paths:
+      - 'tools/dev/**'
+      - 'global.json'
+      - '.github/workflows/developer-tools.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/dev/**'
+      - 'global.json'
+      - '.github/workflows/developer-tools.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-tools-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  developer-tools:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Development workflow regression
+        shell: pwsh
+        run: ./tools/dev/Test-DevWorkflow.ps1
+      - name: Setup pinned SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          global-json-file: global.json
+      - name: Exercise local Full runner on Windows
+        shell: pwsh
+        run: ./tools/dev/Invoke-DevCheck.ps1 -Profile Full
+      - name: Exercise local Quick runner on Windows
+        shell: pwsh
+        run: ./tools/dev/Invoke-DevCheck.ps1 -Profile Quick
+      - name: Preserve compact execution summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: development-check-summary
+          path: artifacts/dev/**/summary.json
+          if-no-files-found: ignore
+          retention-days: 7
