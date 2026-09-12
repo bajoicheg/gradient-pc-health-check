@@ -212,8 +212,18 @@ public static class RemediationWorker
             return new() { Id = "CleanTemp", Success = false, Message = "Очистка не запущена: нужен неповышенный процесс того же пользователя и подтверждённый профиль текущего сеанса." };
         var cutoff = DateTime.Now.AddDays(-Math.Clamp(olderThanDays, 1, 30));
         long files = 0, bytes = 0; var errors = 0;
-        if (!Directory.Exists(root))
-            return new() { Id = "CleanTemp", Success = true, Message = "Каталог Temp текущего пользователя отсутствует или недоступен для проверки; файлы не удалялись." };
+        // Directory.Exists conflates a missing path, a regular file and an access
+        // failure. Only a positively identified missing directory is a no-op success.
+        try
+        {
+            var attributes = File.GetAttributes(root);
+            if ((attributes & FileAttributes.Directory) == 0 || (attributes & FileAttributes.ReparsePoint) != 0)
+                return new() { Id = "CleanTemp", Success = false, Message = "Корень Temp не является обычной папкой; очистка не начата." };
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        { return new() { Id = "CleanTemp", Success = true, Message = "Каталог Temp отсутствует; файлы не удалялись." }; }
+        catch (Exception ex)
+        { return new() { Id = "CleanTemp", Success = false, Message = $"Корень Temp недоступен: {ex.GetType().Name}, 0x{ex.HResult:X8}. Файлы не удалялись." }; }
         var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
         if (IsReparsePoint(rootFull))
             return new() { Id = "CleanTemp", Success = false, Message = "Корень пользовательского Temp является reparse point или недоступен; очистка отменена." };

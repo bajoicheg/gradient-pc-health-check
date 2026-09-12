@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.11.0 — Execution context and elevated read-only Temp preview
+
+- Distinguishes standard, filtered-admin, elevated-admin and full-token contexts; separates process account from current-session user/profile without a physical-console fallback.
+- Adds a main-window context strip, details/availability matrix and preflight action availability; unavailable operations cannot remain selected.
+- Allows read-only session-user Temp preview from elevated and separate technician accounts when the target profile is known.
+- Keeps deletion in a verified same-user non-elevated context, with a fresh runtime check and explicit target scope.
+- Removes unrelated user-profile prerequisites from machine repair commands; keeps original UAC and portable EXE behavior.
+- Records actor/rights/target per remediation action and preserves mixed contexts in UI, clipboard and HTML/JSON; missing legacy context stays unknown.
+- Fixes native effective-role inspection by opening the current token with the identification-duplication right required by WindowsPrincipal.
+- Rejects invalid/inaccessible cleanup roots instead of confusing Directory.Exists false with successful empty cleanup.
+- Adds 30 context/preview, seven native/UI/report and eight action-boundary review cases; previous tests stay enabled.
+- No new commands, credential storage, impersonation, packages, drivers or workflow-permission changes. Version `0.11.0`, FileVersion `0.11.0.0`. [Scope and pilot checks](docs/releases/0.11.0.md).
+
 ## 0.10.0 — Folder space analysis and detailed storage evidence
 
 - Adds idle-on-open Analysis tools for an explicitly chosen folder and local physical-disk details.
