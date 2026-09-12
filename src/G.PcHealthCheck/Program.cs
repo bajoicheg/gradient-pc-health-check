@@ -80,6 +80,7 @@ internal static class Program
         IncidentReviewMenu.Attach(main);
         PerformanceSessionMenu.Attach(main);
         StorageReviewMenu.Attach(main);
+        EndpointReviewMenu.Attach(main);
         Application.Run(main);
     }
 }
