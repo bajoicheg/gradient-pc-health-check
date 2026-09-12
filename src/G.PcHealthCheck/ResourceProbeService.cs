@@ -68,7 +68,12 @@ internal sealed class ResourceProbeService(IResourceProbeNetwork network)
                     addresses = await _network.ResolveAsync(target.Host, token).ConfigureAwait(false);
                     return "Использован системный резолвер (возможны кэш, hosts и суффиксы поиска).";
                 }).ConfigureAwait(false);
+                if (dns.Outcome == "Resolved" && addresses.Length == 0)
+                    dns = dns with { Outcome = "Failed", ErrorCode = "NoAddresses", Detail = "Системный резолвер не вернул адресов. TCP-подключение не выполнялось." };
                 result.Steps.Add(dns);
+                // Retain the in-flight stage, then give user cancellation priority
+                // over a provider's OperationAborted/socket failure or early return.
+                ct.ThrowIfCancellationRequested();
                 if (dns.Outcome != "Resolved") { result.Outcome = "Failed"; return result; }
             }
             ct.ThrowIfCancellationRequested();
@@ -114,7 +119,11 @@ internal sealed class ResourceProbeService(IResourceProbeNetwork network)
             return new(stage, endpoint, stage == "DNS" ? "Resolved" : "Connected", watch.Elapsed.TotalMilliseconds, "",
                 stage == "DNS" ? value : "TCP-соединение установлено и закрыто без прикладных данных.", stage == "TCP" ? value : "");
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ct.IsCancellationRequested && ex is not OutOfMemoryException)
+        {
+            var code = ex is SocketException socket ? $"{socket.SocketErrorCode} ({socket.NativeErrorCode})" : "UserCancelled";
+            return new(stage, endpoint, "Cancelled", watch.Elapsed.TotalMilliseconds, code, "Текущий этап прерван запросом отмены; его завершение не подтверждено.");
+        }
         catch (OperationCanceledException)
         { return new(stage, endpoint, "Timeout", watch.Elapsed.TotalMilliseconds, "DeadlineExceeded", $"Не завершено за {timeoutMs} мс. Это не доказывает блокировку межсетевым экраном."); }
         catch (SocketException ex)
