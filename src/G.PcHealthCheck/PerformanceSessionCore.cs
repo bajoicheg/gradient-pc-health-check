@@ -70,6 +70,9 @@ internal sealed class PerformanceSessionService
         var interval = options.IntervalSeconds * 1000L;
         var duration = options.DurationSeconds * 1000L;
         var next = interval;
+        // Task.Delay is not a real-time timer. Permit a bounded 100-ms scheduling
+        // grace for a due final sample; keep actual timestamps, never invent a new slot.
+        const int finalSchedulingGraceMs = 100;
         try
         {
             ct.ThrowIfCancellationRequested();
@@ -78,7 +81,7 @@ internal sealed class PerformanceSessionService
                 var remaining = next - clock.ElapsedMs;
                 if (remaining > 0) await clock.DelayAsync((int)remaining, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                if (clock.ElapsedMs > duration)
+                if (clock.ElapsedMs > duration + finalSchedulingGraceMs)
                 {
                     result.MissedSlots += (int)((duration - next) / interval + 1);
                     break;
@@ -137,7 +140,8 @@ internal static class PerformanceStatistics
         var values = snapshot.Samples.Select(x => PerformanceValues.Value(x.Reading, metric)).Where(x => x.HasValue).Select(x => x!.Value).Order().ToArray();
         var n = values.Length;
         if (n == 0) return new(metric, snapshot.Samples.Count, 0, null, null, null, null, 0);
-        var median = n % 2 == 1 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
+        // Values are nonnegative: average halves to avoid overflowing two finite inputs.
+        var median = n % 2 == 1 ? values[n / 2] : values[n / 2 - 1] / 2 + values[n / 2] / 2;
         return new(metric, snapshot.Samples.Count, n, values[0], median, values[(int)Math.Ceiling(n * .95) - 1], values[^1], values.Count(x => x >= Threshold(metric)));
     }
 
