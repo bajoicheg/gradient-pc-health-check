@@ -63,7 +63,8 @@ internal static class Program
             {
                 var behavior = FileUseSelfTest.Run();
                 var integration = FileUseIntegrationSelfTest.Run();
-                result = behavior != 0 ? behavior : integration;
+                var review = FileUseReviewSelfTest.Run();
+                result = behavior != 0 ? behavior : integration != 0 ? integration : review;
             }
             Environment.Exit(result);
             return;
