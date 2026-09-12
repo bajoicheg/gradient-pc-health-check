@@ -8,7 +8,7 @@ using System.Text;
 
 namespace G.PcHealthCheck;
 
-// Query-only context discovery. No LogonUser, impersonation, profile loading,
+// Context discovery only. No LogonUser, caller impersonation, profile loading,
 // privilege adjustment, ACL changes or physical-console fallback.
 internal static class ExecutionContextService
 {
@@ -20,7 +20,10 @@ internal static class ExecutionContextService
         try
         {
             using var process = Process.GetCurrentProcess(); session = process.SessionId;
-            using var identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query);
+            // WindowsPrincipal.IsInRole duplicates a primary token at Identification
+            // level before CheckTokenMembership. QUERY alone makes that query fail.
+            // No token is applied to the thread/process and no privilege is enabled.
+            using var identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query | TokenAccessLevels.Duplicate);
             account = identity.Name; sid = identity.User?.Value ?? "";
             try { admin = new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator); }
             catch (Exception ex) { warnings.Add(Error("Активные права", ex)); }
