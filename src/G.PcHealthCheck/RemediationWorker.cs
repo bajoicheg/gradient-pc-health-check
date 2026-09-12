@@ -13,15 +13,13 @@ public static class RemediationWorker
     private static readonly string[] Allowed = ["CleanTemp", "FlushDns", "Dism", "Sfc"];
     private static readonly string[] WorkerAllowed = ["FlushDns", "Dism", "Sfc"];
     private const string PipePrefix = "GPcHealthCheck-";
-    private const string InstalledExeName = "G-PC-Health-Check.exe";
 
     public static int Run(string[] args)
     {
         try
         {
-            var currentExe = Environment.ProcessPath;
-            if (string.IsNullOrWhiteSpace(currentExe) || !IsTrustedElevationLocation(currentExe)) return 26;
-
+            // Portable mode: location and filename are not authorization checks.
+            // Validate the request and administrative token regardless of the EXE path.
             var session = Arg(args, "--session");
             var actionsCsv = Arg(args, "--actions");
             var tempDaysText = Arg(args, "--temp-days");
@@ -58,10 +56,8 @@ public static class RemediationWorker
     }
 
     /// <summary>
-    /// Bootstrap from a user-writable location was intentionally disabled before pilot.
-    /// Elevating an EXE directly from Downloads leaves an unavoidable pre-UAC path-swap boundary
-    /// until the product has Authenticode/trusted deployment. Privileged remediation is allowed
-    /// only from the canonical Program Files location.
+    /// The obsolete copy/install bootstrap is not used. Portable elevation launches
+    /// the current EXE directly via UAC without copying it or requiring installation.
     /// </summary>
     public static int RunBootstrap(string[] args)
     {
@@ -91,14 +87,6 @@ public static class RemediationWorker
         var requiresAdmin = ids.Any(RequiresAdministrator);
         var exe = Environment.ProcessPath ?? throw new InvalidOperationException("Не удалось определить путь к EXE.");
 
-        if (requiresAdmin && !IsTrustedElevationLocation(exe))
-        {
-            throw new InvalidOperationException(
-                "Административные действия разрешены только для проверенной копии G PC Health Check в Program Files. " +
-                "Запуск диагностики и очистки Temp пользователя из Downloads разрешён, но для DISM/SFC сначала разверните EXE в " +
-                "%ProgramFiles%\\G\\PCHealthCheck средствами корпоративного управления ПО.");
-        }
-
         if (!requiresAdmin || DiagnosticsService.IsAdministrator())
         {
             progress?.Report(requiresAdmin ? "Процесс уже запущен с правами администратора. Выполняю выбранные действия…" : "Выполняю выбранные действия…");
@@ -122,14 +110,8 @@ public static class RemediationWorker
         await using var pipe = CreatePipeServer(pipeName);
         var waitForConnection = pipe.WaitForConnectionAsync();
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = exe,
-            Arguments = BuildWorkerArguments("--worker", session, string.Join(',', workerIds), Math.Clamp(tempDays, 1, 30), pipeName, nonce),
-            UseShellExecute = true,
-            Verb = "runas",
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
+        var psi = CreateElevationStartInfo(exe,
+            BuildWorkerArguments("--worker", session, string.Join(',', workerIds), Math.Clamp(tempDays, 1, 30), pipeName, nonce));
 
         Process child;
         try
@@ -427,33 +409,22 @@ public static class RemediationWorker
         writer.Write(json);
     }
 
-    public static bool IsTrustedElevationLocation(string exePath)
+    internal static ProcessStartInfo CreateElevationStartInfo(string executablePath, string arguments)
     {
-        try
+        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        if (!Path.IsPathFullyQualified(executablePath))
+            throw new ArgumentException("Не удалось определить полный путь к текущему EXE.", nameof(executablePath));
+        // FileName is a separate field, not a cmd.exe/PowerShell command string.
+        // Preserve spaces, Unicode and renamed copies. Do not inherit Downloads as CWD.
+        return new ProcessStartInfo
         {
-            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            if (string.IsNullOrWhiteSpace(programFiles)) return false;
-
-            var full = Path.GetFullPath(exePath).TrimEnd(Path.DirectorySeparatorChar);
-            var expected = Path.GetFullPath(Path.Combine(programFiles, "G", "PCHealthCheck", InstalledExeName))
-                .TrimEnd(Path.DirectorySeparatorChar);
-            if (!string.Equals(full, expected, StringComparison.OrdinalIgnoreCase)) return false;
-
-            if (File.Exists(full) && IsReparsePoint(full)) return false;
-
-            var root = Path.GetFullPath(programFiles).TrimEnd(Path.DirectorySeparatorChar);
-            var current = Path.GetDirectoryName(full);
-            while (!string.IsNullOrWhiteSpace(current)
-                   && current.Length > root.Length
-                   && current.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            {
-                if (Directory.Exists(current) && IsReparsePoint(current)) return false;
-                current = Path.GetDirectoryName(current);
-            }
-
-            return true;
-        }
-        catch { return false; }
+            FileName = executablePath,
+            Arguments = arguments,
+            UseShellExecute = true,
+            Verb = "runas",
+            WorkingDirectory = Environment.SystemDirectory,
+            WindowStyle = ProcessWindowStyle.Hidden
+        };
     }
 
     private static bool IsValidPipeName(string? pipeName, string session)
