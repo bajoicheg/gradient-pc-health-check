@@ -1,72 +1,72 @@
 # G PC Health Check
 
-Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting, and controlled remediation.
+Windows 11 x64 Service Desk utility for workstation diagnostics, explainable health assessment, before/after reporting and controlled remediation.
 
-Current project version: **0.8.0**. The application is a self-contained single-file `G-PC-Health-Check.exe`.
+Current project version: **0.9.0**. A self-contained single-file `G-PC-Health-Check.exe`; no installation is required.
 
-> **Security / privacy:** never publish unreviewed diagnostic reports. Evidence may contain workstation/user/domain names, event messages, file paths, process/startup commands, target hostnames and network addresses. Search filters are not report redaction. See [`SECURITY.md`](SECURITY.md).
+> **Security / privacy:** review diagnostic exports before sharing. Event messages, account names, file paths, process/startup commands, target addresses and symptom notes may contain sensitive information. Search filters are not redaction. See [`SECURITY.md`](SECURITY.md).
 
-## New in 0.8.0 — investigate an incident
+## New in 0.9.0 — observe performance during a symptom
 
-Open **Анализ → События за время сбоя…** to collect local Application/System events for an explicit time interval. Search the collected provider/message data, select a channel/Event ID/severity, inspect full available message details, and export evidence. The window opens idle; the default preceding hour can be changed to an interval of up to seven days. Local input times become explicit UTC query bounds. The GUI keeps at most 1000 newest records per log; partial sources, denied access, missing messages and truncation are visible. Search does not inspect records outside the collected subset.
+Open **Анализ → Сеанс производительности…**. Select a duration (30/60/120/300/600 seconds) and interval (1/2/5 seconds), then start and reproduce the slowdown. Defaults: **120 seconds / 2 seconds**. The window opens idle and creates no stress workload. Use **Отметить симптом** to record a note at the click time. Up to 100 notes of 160 characters are allowed; this is not recovery of the historical onset of a freeze.
 
-Open **Анализ → Подробности процессов…** for a read-only current snapshot: name, PID/parent PID, start time, executable path, raw command line, session, working set, thread/handle counts and unavailable-field warnings. Select a row and **Проверить владельца** for an identity-checked GetOwner request. PID and exact creation time are verified before and after the request; reused/exited/unverified identities cannot inherit an earlier process owner's result. Commands are not executed and processes are not modified.
+The live chart switches between CPU, physical-memory use, aggregate disk busy and disk queue. It uses actual sample receipt times and breaks at missing values or long gaps. A typed table retains all completed samples, collection durations and warnings. Median, nearest-rank P95, maximum and valid/total sample counts are visible; reports additionally include minimum and reference-threshold sample counts. These are sample statistics, not percentages of time or proof of a bottleneck.
 
-Both windows offer repeat/cancel, elapsed progress, typed numeric columns, full details, clipboard and non-overwriting HTML/JSON exports. Exports preserve the full snapshot and warnings despite search filters. Historical event emitter PIDs are not automatically associated with current processes; temporal coincidence is not root-cause proof. Complete collection is not a health verdict. Providers may exceed cooperative time/cancellation limits. See [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md) for exact scope, test evidence and Windows 11 pilot checks. No repairs, dependencies or portable/UAC rules are changed.
+**Остановить и сохранить замеры** stops cooperatively and retains completed measurements in memory. Export writes a separate HTML report with all four charts and a full JSON session to a unique directory. Clipboard/export retain warnings and notes; no files are overwritten or uploaded. Export before starting another session to preserve the previous result.
+
+CPU uses GetSystemTimes deltas, RAM uses GlobalMemoryStatusEx, and disks use the local WMI PhysicalDisk `_Total` idle complement and current queue. These readings are sequential, not atomic. Aggregate disk values are not the Windows volume alone. Multiple processor groups make whole-machine CPU unavailable in this implementation rather than silently reporting one group's usage. Missing/invalid values remain unavailable. The provider can exceed requested timeouts; missed slots and overruns are visible. A due final sample allows 100 ms of scheduling grace while preserving its actual time.
+
+The original Health Score and remediation are unchanged. See [`docs/releases/0.9.0.md`](docs/releases/0.9.0.md) for methods, tests and pilot limits. This completes the timed-observation iteration from #26, not the later hardware, general folder-analysis or per-process performance-attribution items.
+
+## Incident and process review (0.8.0)
+
+**Анализ → События за время сбоя…** collects local Application/System events for a chosen interval of up to seven days, default last hour. Local times become explicit UTC query bounds. The GUI keeps at most 1000 newest records per log, with separate source status and visible access failures, missing messages and truncation. Search applies literally to collected data; log, Event ID and severity filters do not recover records outside the collected subset.
+
+**Анализ → Подробности процессов…** shows a current read-only snapshot: PID/parent PID, start time, path, raw command, session, working set, thread/handle counts and unavailable fields. **Проверить владельца** verifies PID and exact creation time before and after GetOwner. Reused/exited/unverified identities cannot inherit another process's owner result. Historical event emitter PIDs are not automatically associated with current processes, and temporal coincidence is not causal proof.
+
+Both windows open idle and offer repeat/cancel, elapsed progress, details, clipboard and full-snapshot HTML/JSON exports. They never execute commands, modify processes, write events or clear logs. See [`docs/releases/0.8.0.md`](docs/releases/0.8.0.md).
 
 ## Resource diagnostics (0.7.0)
 
-Open **Анализ → Проверить доступность ресурса (DNS/TCP)…**. Enter one hostname or IPv4/IPv6 address and one TCP port, explicitly allow outbound diagnostic connections, then select **Проверить / повторить**. Opening the window makes no network requests. Changing the target/port clears consent; another run also requires confirmation through the checkbox. Internationalized names are normalized; URLs, credentials, paths and ranges are rejected.
+**Анализ → Проверить доступность ресурса (DNS/TCP)…** tests one entered hostname/IP and one port after explicit outbound-request consent. The window opens idle; changing target/port and completing a run clears consent. IPv4/IPv6 and internationalized names are supported; URLs, credentials, paths and ranges are rejected.
 
-The session separates system name resolution from each TCP attempt, displays resolved addresses, connection time, successful local source IP, socket error codes and explanations. Port presets only set numbers; they do not test HTTPS, SMB, RDP or SMTP protocols. DNS uses the current system resolver (including possible cache/hosts/search suffixes), not a nominated DNS server. Direct TCP follows OS routing/VPN; an HTTP proxy is not used.
+System name resolution and each TCP attempt have separate outcomes, elapsed times, socket codes and explanations. Successful TCP also records the local source IP. Defaults: DNS 5 seconds, TCP 3 seconds per address (GUI 1–10), at most eight distinct usable addresses. Missing, mixed and cancelled outcomes remain explicit. Port presets set numbers only; TCP sends no application payload and does not validate TLS, HTTP, authentication or application health.
 
-Defaults: DNS timeout 5 seconds; TCP 3 seconds per address (GUI range 1–10); at most eight distinct usable addresses, in resolver order. Mixed results, skipped addresses and cancellation remain explicit. TCP success is not proof of TLS, HTTP, authentication or application health. No application payload is sent. Repeat/cancel, current/previous attempts, clipboard and unique-folder HTML/JSON exports are included. Different targets are not presented as a before/after repair comparison.
-
-The session never resets networking, changes DNS/VPN/proxy or runs repairs. Existing Health Score and Coverage are unchanged. See [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md) for tests, sources and pilot limits. It is not a full TCPView-style connection/process inventory.
+DNS uses the system resolver, potentially including hosts/cache/search suffixes. Direct TCP follows OS routing/VPN, not HTTP proxy/PAC. Repeat/cancel, current/previous attempts, clipboard and unique-folder HTML/JSON exports are included. Different targets are not presented as repair-before/after evidence. See [`docs/releases/0.7.0.md`](docs/releases/0.7.0.md).
 
 ## Read-only inspections (0.6.0)
 
-Open **Анализ → Предпросмотр очистки Temp…** for a metadata-only preview of the existing old-user-Temp cleanup scope: candidate count, logical size estimate, exact cutoff, 200 largest candidates, skipped links and access errors. Enumeration is bounded at 100,000 entries/30 seconds between provider calls; partial results are explicitly identified. Nothing is deleted. Actual cleanup remains a separately confirmed main-window action that rechecks current file eligibility.
+**Анализ → Предпросмотр очистки Temp…** previews only the existing old-user-Temp cleanup rule: exact scope/cutoff, candidate count, logical-size estimate, 200 largest candidates, skipped links and access errors. Enumeration is bounded at 100,000 entries/30 seconds between provider calls; partial results are explicit. Nothing is deleted. Actual cleanup remains a separately confirmed action that checks current file eligibility again.
 
-Open **Анализ → Разбор автозагрузки…** for searchable read-only Run/RunOnce and Startup-folder evidence: names, raw commands/file references, account/scope and per-source collection status. Commands are not expanded or executed, shortcut targets are not resolved, and no entries are disabled. Presence is not proof of enabled state, performance impact or maliciousness. This is a defined subset, not full Autoruns coverage.
+**Анализ → Разбор автозагрузки…** shows searchable Run/RunOnce and Startup-folder records, raw commands/references, account/scope and per-source status. Commands are not expanded/executed, shortcuts are not resolved and entries are not disabled. Registration does not prove enabled state, impact or maliciousness. This is a defined subset, not full Autoruns coverage.
 
-Both inspection windows offer repeat/cancel, full row details, clipboard summary and local HTML/JSON exports. Cancelled or failed scans do not silently replace earlier snapshots. Exports retain the whole saved snapshot regardless of the current search filter. See [`docs/releases/0.6.0.md`](docs/releases/0.6.0.md). Third-party utilities and code are not bundled.
+Both windows support repeat/cancel, full details, clipboard and whole-snapshot HTML/JSON exports irrespective of search filters. See [`docs/releases/0.6.0.md`](docs/releases/0.6.0.md). No third-party utilities or source are bundled.
 
 ## Portable administrative actions (since 0.5.2)
 
-**DISM/SFC can be launched from any EXE location and under any EXE filename**, including Downloads and renamed copies. No installation or fixed Program Files path is required. Start normally, choose actions and confirm them; administrative actions request UAC for the same executable. Move/rename the file only while the application is closed. Windows access and enterprise execution policies still apply; network paths must also be accessible to the administrative identity.
+**DISM/SFC can run from any EXE location/name**, including Downloads and renamed copies. No fixed Program Files path, installation or copy/bootstrap is required. Start normally, choose actions and confirm; administrative actions request UAC for the same executable. Move/rename only while closed. Windows access and enterprise launch policies still apply, including network-path access for the administrative identity.
 
-The worker validates fixed action IDs, session, pipe, nonce and administrative token. User Temp cleanup remains outside the elevated worker. The obsolete copy/install bootstrap is not used. Portability removes the old deployment-path restriction; it does not eliminate writable-directory risks or add Authenticode signing.
+The worker validates fixed action IDs, session, pipe, nonce and the administrative token. User Temp cleanup remains in the non-elevated parent. The obsolete bootstrap stays disabled. Removing a deployment-path restriction does not eliminate writable-directory risks or add a publisher signature.
 
-## Diagnostic capabilities
+## Main diagnostics and remediation
 
-The main window collects CPU, RAM, logical/physical disks, Windows/build, processes, Event Log, startup, security-product, network and Windows Update signals. CPU/disk values use short-series medians; disk-pressure findings require elevated busy percentage and queue depth together. Event findings consider repeated Provider/Event ID groups rather than raw counts alone.
+The dashboard collects CPU, RAM, logical/physical disk, Windows/build, processes, events, startup, security-product, network and update signals. CPU/disk values use short-series medians; disk-pressure findings require elevated busy and queue together. Event findings consider repeated Provider/Event ID groups. Score, coverage, findings, next steps and before/after reports are visible; missing telemetry is not health or a fabricated fault. System-volume selection is shared across assessment, dashboard and reports without assuming C:.
 
-The dashboard exposes score, coverage, findings and next steps. Missing telemetry is not treated as healthy or fabricated as a confirmed fault. System-volume selection is shared across assessment, dashboard and reports and does not assume C:.
+**Типовые проблемы: сеть, печать, устройства** adds local IP/DNS configuration, printing/Spooler and PnP evidence with guided steps, repeat/cancel and export. Fixed Windows Settings shortcuts help investigation. Optional DNS-cache cleanup needs separate confirmation. Configuration is not reachability, driver status is not successful printing and command success is not symptom resolution.
 
-**Типовые проблемы: сеть, печать, устройства** adds local IP/DNS configuration, printer/Spooler and Plug-and-Play checks with evidence, guided steps, repeat/cancel and export. Fixed Windows Settings shortcuts assist investigation. Optional DNS-cache cleanup requires separate confirmation.
+`CleanTemp` removes old ordinary files under the interactive user's `%LOCALAPPDATA%\Temp`, not Windows Temp/Prefetch or encountered reparse points. It refuses an elevated GUI. `FlushDns` normally runs without the administrative worker. DISM RestoreHealth and SFC /scannow require administrative rights. Combined batches keep CleanTemp in the parent user context; worker commands remain exactly FlushDns/Dism/Sfc. Unknown/mixed requests and CleanTemp are rejected by that worker. Cancelled UAC does not execute the batch.
 
-Configuration is not proof of reachability, printer status is not proof of printing, and command success is not proof the symptom is resolved. Additional inspection/resource windows do not silently change the original health model. See [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/COMMON-PROBLEMS.md`](docs/COMMON-PROBLEMS.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) and [`CHANGELOG.md`](CHANGELOG.md).
-
-## Remediation boundaries
-
-Diagnostics and reports do not require elevation. `CleanTemp` removes only old ordinary files from the interactive user's `%LOCALAPPDATA%\Temp`, not Windows Temp/Prefetch or encountered reparse points. It refuses to run in an elevated GUI. `FlushDns` normally runs without the administrative worker.
-
-DISM RestoreHealth and SFC /scannow require administrative rights. A standard-user GUI requests UAC for the current EXE irrespective of name/location. Combined batches keep `CleanTemp` in the parent user context. The worker accepts only `FlushDns`, `Dism`, `Sfc`, rejects `CleanTemp` and unknown/mixed requests, and returns session/nonce-bound results over a local named pipe. Cancelled UAC does not execute the batch.
-
-No automatic network reset, DHCP release, DNS/proxy/VPN/GPO/EDR change, Spooler restart, job deletion, driver installation, startup disabling or reboot is added. See [`docs/SECURITY.md`](docs/SECURITY.md).
+No automatic network reset, DHCP release, DNS/proxy/VPN/GPO/EDR change, Spooler restart, job deletion, driver installation, startup disabling or reboot is added. See [`docs/SECURITY.md`](docs/SECURITY.md), [`docs/ASSESSMENT-MODEL.md`](docs/ASSESSMENT-MODEL.md), [`docs/COMMON-PROBLEMS.md`](docs/COMMON-PROBLEMS.md), [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md) and [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Build, CI and provenance
 
-`Windows EXE` runs on main pushes, PRs and manual dispatch with read-only repository permissions and pinned Actions. Gates cover PowerShell parsing, deterministic branding, transitive NuGet audit, warnings-as-errors build, source/single-EXE self-tests, portable worker checks, FileVersion, SHA-256 and pilot metadata/UTF-8.
-
-PR checks precede merge. Successful main builds trigger release publication and supply-chain attestations: exact tested SHA/run, that run's artifacts and rechecked EXE hash. Existing releases are not overwritten. SPDX SBOM and EXE/pilot provenance are described in [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
+`Windows EXE` runs on main pushes, PRs and manual dispatch using read-only repository permissions and pinned Actions. Gates cover PowerShell parsing, deterministic branding, transitive NuGet audit, warnings-as-errors build, source/single-EXE tests, portable worker tests, FileVersion, SHA-256 and pilot metadata/UTF-8. PR checks precede merge; successful main builds trigger release publication and supply-chain attestations for the exact tested SHA/run and rechecked artifact hash. Existing releases are not overwritten. See [`docs/SUPPLY-CHAIN.md`](docs/SUPPLY-CHAIN.md).
 
 ```powershell
 gh attestation verify G-PC-Health-Check.exe --repo bajoicheg/g-pc-health-check
 ```
 
-PR builds are not releases. Hosted Windows Server tests, including local read-only event/WMI and loopback-only network integration, do not replace managed Windows 11 VPN/proxy/DNS, GUI/DPI/UAC and real remediation testing. Provider cancellation is not a guarantee that every OS-internal operation immediately stops. See [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md) and version notes.
+PR builds are not releases. Hosted Windows Server tests, local read-only counters/event/WMI integration and loopback TCP do not replace managed Windows 11 real-workload, VPN/proxy/DNS, GUI/DPI/UAC and remediation testing. Provider cancellation cannot guarantee immediate termination of every OS call. See [`docs/E2E-TEST-PLAN.md`](docs/E2E-TEST-PLAN.md) and version notes.
 
 ## Building locally
 
@@ -81,6 +81,4 @@ dotnet publish src/G.PcHealthCheck/G.PcHealthCheck.csproj -c Release -r win-x64 
 
 ## Contributing, licensing and signing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). Use synthetic/redacted public reports and [`SECURITY.md`](SECURITY.md) for private vulnerabilities. Source is Apache License 2.0; see [`LICENSE`](LICENSE). G branding is reserved; see [`NOTICE`](NOTICE).
-
-The EXE is not Authenticode-signed. Verify checksums/provenance and use an approved distribution channel. Installation remains optional; build attestations do not replace a Windows publisher signature.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md); use synthetic/redacted public reports and [`SECURITY.md`](SECURITY.md) for private vulnerabilities. Source is Apache License 2.0 ([`LICENSE`](LICENSE)); G branding is reserved ([`NOTICE`](NOTICE)). The EXE is not Authenticode-signed. Verify checksums/provenance and use an approved distribution channel; build attestations do not replace a Windows publisher signature.
