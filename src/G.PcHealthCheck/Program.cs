@@ -59,6 +59,12 @@ internal static class Program
                 var integration = EndpointReviewIntegrationSelfTest.Run();
                 result = behavior != 0 ? behavior : integration;
             }
+            if (result == 0)
+            {
+                var behavior = FileUseSelfTest.Run();
+                var integration = FileUseIntegrationSelfTest.Run();
+                result = behavior != 0 ? behavior : integration;
+            }
             Environment.Exit(result);
             return;
         }
