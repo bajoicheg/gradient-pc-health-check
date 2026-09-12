@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": null,
+  "repository": "bajoicheg/g-pc-health-check",
+  "task": null,
+  "stage": "not-started",
+  "pullRequest": null,
+  "branch": null,
+  "baseSha": null,
+  "remoteHeadSha": null,
+  "localHeadSha": null,
+  "localUncommittedFiles": [],
+  "localUntrackedFiles": [],
+  "checkpointArtifact": null,
+  "checks": [],
+  "blocker": {
+    "category": null,
+    "operation": null,
+    "occurredAtUtc": null,
+    "requestId": null,
+    "privateEvidenceLocation": null
+  },
+  "nextStep": null,
+  "reviewedSha": null,
+  "mergedSha": null,
+  "releaseTag": null,
+  "releaseAssetBytesVerified": false
+}

@@ -1,43 +1,33 @@
 # Contributing
 
-Contributions are welcome through pull requests.
+Contributions are welcome through focused pull requests. Read [AGENTS.md](AGENTS.md) and [the development workflow](docs/DEVELOPMENT.md) before work, especially when resuming after a connector failure.
+
+## Fast local loop
+
+Use a Windows checkout with Git, PowerShell 7 and the SDK pinned in `global.json`:
+
+```powershell
+pwsh -NoProfile -File tools/dev/Invoke-DevCheck.ps1 -Profile Quick
+pwsh -NoProfile -File tools/dev/Invoke-DevCheck.ps1 -Profile Full
+```
+
+Quick compiles and runs all source tests without publishing an EXE. Full adds packaged-EXE and portable checks. Both save per-stage results and logs to ignored `artifacts/dev/`. Neither is a release or a substitute for required GitHub checks and real Windows 11 pilot acceptance. The scripts do not provision a development machine, authenticate to GitHub or upload source.
 
 ## Before opening a pull request
 
-- Work from a fork or feature branch; do not expect direct write access to this repository.
-- Keep changes focused and explain the user-visible and security impact.
-- Do not commit secrets, credentials, internal URLs, workstation evidence, user data, or production diagnostic bundles.
-- Do not attach raw `G-PC-Health-Check-E2E-*.zip` evidence to a public issue or pull request.
-- Do not weaken the remediation allow-list, canonical-path checks, nonce/session binding, reparse-point protections, or CI security gates without an explicit security rationale.
+- Work from a fork or feature branch; no direct writes to main.
+- Keep one coherent task per PR; record exact base/head/test SHAs and the next step in its checkpoint block.
+- Do not commit credentials, secrets, internal infrastructure details, user data or raw diagnostic/E2E bundles.
+- Preserve worker allow-list, nonce/session and relevant reparse-point checks; explain and test any privilege-boundary change.
+- Preserve arbitrary portable EXE location/name and elevated read-only Temp preview. The old canonical Program Files-only restriction was removed in 0.5.2 and must not be restored accidentally.
+- On a tool-evaluation denial, stop that operation and record a private incident/checkpoint. Do not evade it with another endpoint, encoding or account. Read remote state before repeating an uncertain write.
 
-## Required checks
+## Required checks and release boundaries
 
-The project targets Windows 11 x64 and .NET 8. Pull requests should pass:
+The Windows x64/.NET project retains its Windows EXE build/self-tests, transitive NuGet audit, packaged/portable tests, PowerShell gates, E2E Evidence Analyzer and Supply Chain Smoke checks. The path-filtered Developer Tools workflow additionally validates development helpers when they change; it is not a new blanket required check for unrelated PRs.
 
-- `Windows EXE` build and self-tests;
-- NuGet vulnerability audit;
-- published EXE security negative tests;
-- `E2E Evidence Analyzer` synthetic tests;
-- PowerShell parser checks.
+External PRs run with read-only repository permissions. Only the existing successful exact-main-push workflow publishes release assets. Do not replace assets of an existing version, label local/PR builds as releases, or bump product versions for development-process-only maintenance. Hosted Windows Server CI does not replace user-session/GUI/UAC tests on Windows 11.
 
-GitHub Actions on external pull requests run with read-only repository permissions. Release artifacts are produced only from trusted repository runs and official releases are created only from successful pushes to `main`.
+## Security and licensing
 
-## Pull request content
-
-Please include:
-
-- what changed and why;
-- how it was tested;
-- whether remediation/elevation behavior changed;
-- whether diagnostic collection or report contents changed;
-- whether the change affects release packaging, GitHub Actions, or dependencies.
-
-## Security reports
-
-Do not report security vulnerabilities in a public issue. Follow [`SECURITY.md`](SECURITY.md).
-
-## Licensing
-
-By submitting a contribution for inclusion in this project, you agree that your contribution is licensed under the Apache License, Version 2.0, unless explicitly stated otherwise.
-
-The project name, G-shield artwork, logos, and other branding are subject to the separate trademark/branding notice in [`NOTICE`](NOTICE).
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md). By submitting a contribution, you agree it is licensed under Apache License 2.0 unless explicitly stated otherwise. G branding remains subject to [NOTICE](NOTICE).
